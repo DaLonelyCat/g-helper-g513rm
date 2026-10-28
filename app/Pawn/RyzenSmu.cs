@@ -134,7 +134,7 @@ namespace PawnIO
 
         public bool Initialize(Assembly assembly)
         {
-            string name = assembly.GetName().Name + ".RyzenSMU.bin";
+            string name = "GHelper.RyzenSMU.bin";
             using var stream = assembly.GetManifestResourceStream(name)
                 ?? throw new InvalidOperationException($"Embedded resource '{name}' not found.");
             using var ms = new MemoryStream();

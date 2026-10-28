@@ -1,4 +1,4 @@
-﻿using GHelper.Fan;
+using GHelper.Fan;
 using GHelper.Gpu.NVidia;
 using GHelper.Helpers;
 using GHelper.Mode;
@@ -59,7 +59,7 @@ namespace GHelper
 
             labelFans.Text = "BIOS " + Properties.Strings.FanCurves;
             labelBoost.Text = Properties.Strings.CPUBoost;
-            buttonReset.Text = Properties.Strings.FactoryDefaults;
+            buttonReset.Text = "Reset G513RM";
             checkApplyFans.Text = Properties.Strings.ApplyFanCurve;
 
             labelGPU.Text = Properties.Strings.GPUSettings;
@@ -1195,7 +1195,7 @@ namespace GHelper
             }
 
             // XG Mobile Fan check
-            if (Program.acpi.IsXGConnected() || XGM.IsConnected())
+            if (false)
             {
                 AppConfig.Set("xgm_fan", 1);
                 chartCount++;
@@ -1306,6 +1306,11 @@ namespace GHelper
         private void ButtonReset_Click(object? sender, EventArgs e)
         {
 
+            G513Presets.EnsureSeeded(forceReset: true);
+            InitAll();
+            modeControl.SetPerformanceMode();
+            LabelFansResult("Restored G513RM calibrated presets and fan curves.");
+            return;
             LoadProfile(seriesCPU, AsusFan.CPU, true);
             LoadProfile(seriesGPU, AsusFan.GPU, true);
 
@@ -1341,7 +1346,7 @@ namespace GHelper
 
             InitPowerPlan();
 
-            XGM.Reset();
+            // XGM removed
 
 
             if (gpuVisible)

@@ -1,12 +1,9 @@
-using GHelper.Ally;
 using GHelper.Battery;
 using GHelper.Display;
 using GHelper.Gpu;
 using GHelper.Helpers;
 using GHelper.Input;
 using GHelper.Mode;
-using GHelper.Overlay;
-using GHelper.Peripherals;
 using GHelper.USB;
 using Microsoft.Win32;
 using System.Diagnostics;
@@ -17,22 +14,18 @@ using static NativeMethods;
 
 namespace GHelper
 {
-
     static class Program
     {
-        public static NotifyIcon trayIcon;
-        public static AsusACPI acpi;
+        public static NotifyIcon trayIcon = default!;
+        public static AsusACPI acpi = default!;
 
-        public static SettingsForm settingsForm;
+        public static SettingsForm settingsForm = default!;
 
-        public static ModeControl modeControl;
-        public static GPUModeControl gpuControl;
-        public static AllyControl allyControl;
-        public static ClamshellModeControl clamshellControl;
+        public static ModeControl modeControl = default!;
+        public static GPUModeControl gpuControl = default!;
+        public static ClamshellModeControl clamshellControl = default!;
 
-        public static ToastForm toast;
-
-        public static HardwareOverlay? hardwareOverlay;
+        public static ToastForm toast = default!;
 
         public static IntPtr unRegPowerNotify, unRegPowerNotifyLid, unRegPowerNotifyEnergy, unRegSuspendResume;
         public static int WM_TASKBARCREATED = 0;
@@ -59,33 +52,20 @@ namespace GHelper
                 return;
             }
 
-            string language = AppConfig.GetString("language");
-            try
-            {
-                if (language != null && language.Length > 0)
-                    Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo(language);
-                else
-                {
-                    var culture = CultureInfo.CurrentUICulture;
-                    if (culture.ToString() == "kr") culture = CultureInfo.GetCultureInfo("ko");
-                    Thread.CurrentThread.CurrentUICulture = culture;
-                }
-            } catch
-            {
-                Logger.WriteLine("Unknown Language: " + language);
-            }
+            CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo("en");
+            Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo("en");
 
             Logger.WriteLine("----------------------");
-            Logger.WriteLine("App launched: " + AppConfig.GetModel() + " :" + Assembly.GetExecutingAssembly().GetName().Version.ToString() + CultureInfo.CurrentUICulture + (ProcessHelper.IsUserAdministrator() ? "." : ""));
+            Logger.WriteLine("G-Helper G513RM Edition launched: " + AppConfig.GetModel() + " :" + Assembly.GetExecutingAssembly().GetName().Version?.ToString() + (ProcessHelper.IsUserAdministrator() ? " [Admin]" : ""));
+
+            // Ensure calibrated ROG Strix G513RM presets (Silent, Balanced, Turbo, Sweet Spot) are seeded
+            G513Presets.EnsureSeeded();
 
             settingsForm = new SettingsForm();
             modeControl = new ModeControl();
             gpuControl = new GPUModeControl(settingsForm);
-            allyControl = new AllyControl(settingsForm);
             clamshellControl = new ClamshellModeControl();
             toast = new ToastForm();
-
-            hardwareOverlay = new HardwareOverlay();
 
             ProcessHelper.CheckAlreadyRunning();
             ProcessHelper.SetPriority();
@@ -98,7 +78,7 @@ namespace GHelper
 
             acpi = new AsusACPI();
 
-            if (!acpi.IsConnected() && AppConfig.IsASUS() && !AppConfig.IsDesktop())
+            if (!acpi.IsConnected() && AppConfig.IsASUS())
             {
                 DialogResult dialogResult = MessageBox.Show(Properties.Strings.ACPIError, Properties.Strings.StartupError, MessageBoxButtons.YesNo);
                 if (dialogResult == DialogResult.Yes)
@@ -119,7 +99,7 @@ namespace GHelper
 
             trayIcon = new NotifyIcon
             {
-                Text = "G-Helper",
+                Text = "G-Helper: ROG Strix G513RM",
                 Icon = Properties.Resources.standard,
                 Visible = true
             };
@@ -136,15 +116,16 @@ namespace GHelper
             trayIcon.MouseClick += TrayIcon_MouseClick;
             trayIcon.MouseMove += TrayIcon_MouseMove;
 
-
             inputDispatcher = new InputDispatcher();
 
             settingsForm.InitAura();
-            settingsForm.InitMatrix();
 
             ScreenControl.InitScreen();
 
             SetAutoModes(init: true);
+
+            // Start smart game / 3D workload watcher if enabled
+            ProcessProfileWatcher.Init();
 
             powerSettleTimer.Elapsed += OnPowerSettled;
 
@@ -163,16 +144,6 @@ namespace GHelper
             unRegPowerNotifyLid = NativeMethods.RegisterPowerSettingNotification(settingsForm.Handle, PowerSettingGuid.LIDSWITCH_STATE_CHANGE, NativeMethods.DEVICE_NOTIFY_WINDOW_HANDLE);
             unRegPowerNotifyEnergy = NativeMethods.RegisterPowerSettingNotification(settingsForm.Handle, PowerSettingGuid.EnergySaverStatus, NativeMethods.DEVICE_NOTIFY_WINDOW_HANDLE);
             unRegSuspendResume = NativeMethods.RegisterSuspendResumeNotification(settingsForm.Handle, NativeMethods.DEVICE_NOTIFY_WINDOW_HANDLE);
-
-
-            Task task = Task.Run(() =>
-            {
-                PeripheralsProvider.DetectAllAsusMice();
-                PeripheralsProvider.DetectAllAsusKeyboards();
-                PeripheralsProvider.DetectAllAsusHeadsets();
-                Peripherals.Mouse.Models.StrixArion.Detect();
-            });
-            PeripheralsProvider.RegisterForDeviceEvents();
 
             if (Environment.CurrentDirectory.Trim('\\') == Application.StartupPath.Trim('\\') || action.Length > 0)
             {
@@ -193,6 +164,9 @@ namespace GHelper
                     settingsForm.extraForm = new Extra();
                     settingsForm.extraForm.Show();
                     settingsForm.extraForm.ServiesToggle();
+                    break;
+                case "services_main":
+                    settingsForm.ToggleServicesFromMain();
                     break;
                 case "uv":
                     Startup.ReScheduleAdmin();
@@ -219,13 +193,9 @@ namespace GHelper
                 settingsForm.VisualiseArmoury(AsusService.IsArmouryRunning());
             });
 
-            if (AppConfig.IsOverlay())
-                hardwareOverlay?.StartOverlay();
-
             Application.ApplicationExit += OnExit;
             Application.Run();
         }
-
 
         private static void SystemEvents_SessionEnding(object sender, SessionEndingEventArgs e)
         {
@@ -233,7 +203,6 @@ namespace GHelper
             modeControl.ShutdownReset();
             BatteryControl.AutoBattery();
             InputDispatcher.ShutdownStatusLed();
-            XGM.NotifyShutdown();
         }
 
         private static void SystemEvents_SessionSwitch(object sender, SessionSwitchEventArgs e)
@@ -262,7 +231,6 @@ namespace GHelper
 
         static void SystemEvents_UserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
         {
-
             switch (e.Category)
             {
                 case UserPreferenceCategory.General:
@@ -283,17 +251,9 @@ namespace GHelper
                     if (settingsForm.updatesForm is not null && settingsForm.updatesForm.Text != "")
                         settingsForm.updatesForm.InitTheme();
 
-                    if (settingsForm.matrixForm is not null && settingsForm.matrixForm.Text != "")
-                        settingsForm.matrixForm.InitTheme();
-
-                    if (settingsForm.handheldForm is not null && settingsForm.handheldForm.Text != "")
-                        settingsForm.handheldForm.InitTheme();
-
                     break;
             }
         }
-
-
 
         public static bool SetAutoModes(bool powerChanged = false, bool init = false, bool wakeup = false)
         {
@@ -311,29 +271,17 @@ namespace GHelper
             Logger.WriteLine("AutoSetting for " + SystemInformation.PowerStatus.PowerLineStatus.ToString());
 
             BatteryControl.AutoBattery(init);
-            if (init) InputDispatcher.InitScreenpad();
             DynamicLightingHelper.Init();
             ScreenControl.InitOptimalBrightness();
 
-            inputDispatcher.Init();
-            //HardwareControl.ReadSensors(true);
+            inputDispatcher?.Init();
 
             modeControl.AutoPerformance(powerChanged);
 
-            if (powerChanged) settingsForm.matrixControl.SetMatrix(true);
-            else settingsForm.matrixControl.SetDevice(true);
             InputDispatcher.InitStatusLed();
             if (init) NumberPad.Init();
-            XGM.Init();
 
-            if (AppConfig.IsAlly())
-            {
-                allyControl.Init();
-            }
-            else
-            {
-                InputDispatcher.AutoKeyboard();
-            }
+            InputDispatcher.AutoKeyboard();
 
             bool switched = gpuControl.AutoGPUMode(delay: 1000);
             if (!switched)
@@ -400,7 +348,6 @@ namespace GHelper
                 gpuControl.StandardModeFix();
                 modeControl.ShutdownReset();
                 InputDispatcher.ShutdownStatusLed();
-                XGM.NotifyShutdown();
                 return;
             }
 
@@ -418,8 +365,6 @@ namespace GHelper
         {
             if (settingsForm.Visible)
             {
-                // If helper window is not on top, this just focuses on the app again
-                // Pressing the ghelper button again will hide the app
                 if (checkForFocus && !settingsForm.HasAnyFocus(trayClick) && !AppConfig.Is("topmost"))
                 {
                     settingsForm.ShowAll();
@@ -444,11 +389,7 @@ namespace GHelper
                 settingsForm.ShowAll();
 
                 settingsForm.Left = screen.WorkingArea.Right - 10 - settingsForm.Width;
-
-                if (AppConfig.IsAlly())
-                    settingsForm.Top = Math.Max(10, screen.Bounds.Height - 110 - settingsForm.Height);
-                else
-                    settingsForm.Top = screen.WorkingArea.Top - screen.Bounds.Top > screen.Bounds.Bottom - screen.WorkingArea.Bottom ? screen.WorkingArea.Top + 10 : screen.WorkingArea.Bottom - 10 - settingsForm.Height;
+                settingsForm.Top = screen.WorkingArea.Top - screen.Bounds.Top > screen.Bounds.Bottom - screen.WorkingArea.Bottom ? screen.WorkingArea.Top + 10 : screen.WorkingArea.Bottom - 10 - settingsForm.Height;
 
                 settingsForm.VisualiseGPUMode();
             }
@@ -458,7 +399,6 @@ namespace GHelper
         {
             if (e.Button == MouseButtons.Left)
                 SettingsToggle(trayClick: true);
-
         }
 
         static void TrayIcon_MouseMove(object? sender, MouseEventArgs e)
@@ -466,7 +406,7 @@ namespace GHelper
             settingsForm.RefreshSensors();
         }
 
-        static void OnExit(object sender, EventArgs e)
+        static void OnExit(object? sender, EventArgs e)
         {
             if (trayIcon is not null)
             {
@@ -474,7 +414,6 @@ namespace GHelper
                 trayIcon.Dispose();
             }
 
-            PeripheralsProvider.UnregisterForDeviceEvents();
             clamshellControl.UnregisterDisplayEvents();
             NativeMethods.UnregisterPowerSettingNotification(unRegPowerNotify);
             NativeMethods.UnregisterPowerSettingNotification(unRegPowerNotifyLid);
@@ -484,14 +423,6 @@ namespace GHelper
 
         static void Charge()
         {
-            if (AppConfig.IsZ13())
-            {
-                AsusHid.Write([
-                    Encoding.ASCII.GetBytes("]ASUS Tech.Inc."),
-                    [AsusHid.AURA_ID, 0xC0, 0x03, 0x01]
-                ], "Init");
-            }
-
             try
             {
                 int limit = AppConfig.Get("charge_limit");
@@ -542,6 +473,5 @@ namespace GHelper
                 }
             }
         }
-
     }
 }

@@ -11,7 +11,6 @@ using System.Runtime.InteropServices;
 
 public static class HardwareControl
 {
-
     public static IGpuControl? GpuControl;
 
     public static float? cpuTemp = -1;
@@ -46,8 +45,6 @@ public static class HardwareControl
     public static int? vramUsedMb;
     public static int? ramUsedMb;
 
-    // Set by the overlay so ReadSensorsOverlay skips sensors that won't be
-    // displayed in the current mode (fan ACPI calls and CPU usage counter).
     public static bool readFans;
     public static bool readUsage;
     public static bool readMemory;
@@ -56,8 +53,6 @@ public static class HardwareControl
 
     static long lastUpdate;
 
-    static bool isPZ13 = AppConfig.IsPZ13();
-    static bool isAlly = AppConfig.IsAlly();
     static bool isAMDiGPU = AppConfig.IsAMDiGPU();
 
     static bool _chargeWatt = AppConfig.Is("charge_watt");
@@ -324,34 +319,6 @@ public static class HardwareControl
     {
         var now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 
-        if (isAlly)
-        {
-            try
-            {
-                decimal? discharge = Program.acpi.GetBatteryDischarge();
-                if (discharge is not null)
-                {
-                    batteryRate = Math.Abs(discharge.Value) < 1.5m ? 0 : discharge;
-
-                    // Capacity from cached power manager state is sufficient
-                    var batteryState = GetNativeBatteryState();
-                    if (batteryState.HasValue)
-                    {
-                        chargeCapacity = batteryState.Value.RemainingCapacity;
-
-                        if (fullCapacity is null or 0 && batteryState.Value.MaxCapacity > 0)
-                            fullCapacity = batteryState.Value.MaxCapacity;
-                    }
-                    FormatBatteryCharge();
-                    return;
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("Battery Reading: " + ex.Message);
-            }
-        }
-
         if (Math.Abs(now - _lastBatteryRead) < 5000)
         {
             FormatBatteryCharge();
@@ -374,7 +341,6 @@ public static class HardwareControl
                     batteryRate = (decimal)directStatus.Value.Rate / 1000;
             }
 
-            // MaxCapacity doesn't change at runtime, only need it once
             if (fullCapacity is null or 0)
             {
                 var batteryState = GetNativeBatteryState();
@@ -408,7 +374,6 @@ public static class HardwareControl
 
         try
         {
-
             ManagementScope scope = new ManagementScope("root\\WMI");
             ObjectQuery query = new ObjectQuery("SELECT DesignedCapacity FROM BatteryStaticData");
 
@@ -420,7 +385,6 @@ public static class HardwareControl
                     designCapacity = Convert.ToDecimal(obj["DesignedCapacity"]);
                 }
             }
-
         }
         catch (Exception ex)
         {
@@ -444,14 +408,12 @@ public static class HardwareControl
         batteryHealth = health * 100;
     }
 
-
     public static float? GetCPUTemp()
     {
         var last = DateTimeOffset.Now.ToUnixTimeSeconds();
         if (Math.Abs(last - lastUpdate) < 2) return cpuTemp;
         lastUpdate = last;
 
-        if (isPZ13) return (float)GetCPUTempWMI();
         cpuTemp = Program.acpi.DeviceGet(AsusACPI.Temp_CPU);
 
         if (cpuTemp < 0) try
@@ -463,36 +425,9 @@ public static class HardwareControl
         }
         catch (Exception)
         {
-            //Debug.WriteLine("Failed reading CPU temp :" + ex.Message);
         }
-
 
         return cpuTemp;
-    }
-
-    static double GetCPUTempWMI()
-    {
-        try
-        {
-            string wmiNamespace = @"root\WMI";
-            string wmiQuery = @"SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature WHERE InstanceName = 'ACPI\\QCOM0C5A\\1_0'";  // ACPI\\ThermalZone\\THRM_0
-            using (ManagementObjectSearcher searcher = new ManagementObjectSearcher(wmiNamespace, wmiQuery))
-            {
-                foreach (ManagementObject obj in searcher.Get())
-                {
-                    using (obj)
-                    {
-                        double tempKelvin = Convert.ToDouble(obj["CurrentTemperature"]);
-                        return (tempKelvin / 10) - 273.15;
-                    }
-                }
-            }
-        }
-        catch (Exception)
-        {
-            //Logger.WriteLine("Error retrieving temperature: " + ex.Message);
-        }
-        return -1;
     }
 
     public static float? GetGPUTemp()
@@ -500,12 +435,10 @@ public static class HardwareControl
         try
         {
             gpuTemp = GpuControl?.GetCurrentTemperature();
-
         }
         catch (Exception)
         {
             gpuTemp = -1;
-            //Debug.WriteLine("Failed reading GPU temp :" + ex.Message);
         }
 
         if (gpuTemp is null || gpuTemp < 0 || gpuTemp >= 125)
@@ -535,36 +468,6 @@ public static class HardwareControl
 
         Task.Run(() =>
         {
-            if (isAMDiGPU && _cpuChannel is null)
-                try
-                {
-                    _apuChannel = new EnergyChannel("Apu Power");
-                    _cpuChannel = new EnergyChannel("CPU Power");
-                    Logger.WriteLine("Power source: Energy Meter APU/CPU channels");
-                }
-                catch { }
-
-            if (isAMDiGPU && _coreCounters is null)
-                try
-                {
-                    var names = new PerformanceCounterCategory("Energy Meter").GetInstanceNames();
-                    var cores = new List<PerformanceCounter>();
-                    foreach (var name in names.Where(n => n.EndsWith("_CORE")))
-                    {
-                        var counter = new PerformanceCounter("Energy Meter", "Power", name, true);
-                        counter.NextValue();
-                        cores.Add(counter);
-                    }
-                    if (cores.Count > 0)
-                    {
-                        _coreCounters = cores;
-                        Logger.WriteLine($"CPU Power source: {cores.Count} RAPL cores");
-                    }
-                }
-                catch { }
-
-            // Try cached instance name first — skips the PerformanceCounterCategory
-            // enumeration which costs ~1–2 s on a cold perflib cache.
             var cached = AppConfig.GetString("cpu_power_counter");
             if (!string.IsNullOrEmpty(cached))
             {
@@ -611,7 +514,6 @@ public static class HardwareControl
 
     private static List<PerformanceCounter>? _coreCounters;
 
-    // Power sample: raw = cumulative picowatt-hours, base = 32-bit time in 3.6 µs units, both from one measurement
     private class EnergyChannel
     {
         private readonly PerformanceCounter _power;
@@ -678,10 +580,6 @@ public static class HardwareControl
         }
         catch
         {
-            // Counter became invalid (e.g. after a fullscreen game exits on Intel).
-            // Allow a few re-init attempts, then give up so we don't spawn a Task.Run
-            // every second forever on machines where the counter is permanently broken.
-            // ResetCPUPowerCounter() on overlay toggle gives it another fresh chance.
             _cpuPowerCounter?.Dispose();
             _cpuPowerCounter = null;
             if (++_cpuPowerReadErrors >= CpuPowerMaxReadErrors)
@@ -704,8 +602,6 @@ public static class HardwareControl
         _cpuPowerCounterFailed = false;
     }
 
-    // Direct Win32 API — same source Task Manager uses, avoids PerformanceCounter
-    // sampling artifacts and the ~1 s warm-up delay of `% Processor Time \ _Total`.
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetSystemTimes(out long lpIdleTime, out long lpKernelTime, out long lpUserTime);
@@ -719,8 +615,6 @@ public static class HardwareControl
 
         long now = Environment.TickCount64;
 
-        // First read, or resumed after a long pause (mode switch, overlay restart) —
-        // capture baseline and skip this tick so the next delta covers a clean ~1 s window.
         if (!_cpuUsageBaseline || now - _cpuLastTick > 2000)
         {
             _cpuLastIdle = idle; _cpuLastKernel = kernel; _cpuLastUser = user; _cpuLastTick = now;
@@ -729,7 +623,7 @@ public static class HardwareControl
         }
 
         long deltaIdle = idle - _cpuLastIdle;
-        long deltaTotal = (kernel - _cpuLastKernel) + (user - _cpuLastUser); // kernel includes idle
+        long deltaTotal = (kernel - _cpuLastKernel) + (user - _cpuLastUser);
 
         _cpuLastIdle = idle; _cpuLastKernel = kernel; _cpuLastUser = user; _cpuLastTick = now;
 
@@ -763,7 +657,6 @@ public static class HardwareControl
         return ((int)status.dwMemoryLoad, usedMb);
     }
 
-
     private static AmdGpuControl? _amdApuControl;
     private static bool _amdApuPowerFailed;
 
@@ -780,38 +673,6 @@ public static class HardwareControl
         catch
         {
             _amdApuPowerFailed = true;
-            return null;
-        }
-    }
-
-    private static PawnIO.IntelMsr? _intelMsr;
-    private static bool _intelMsrPowerFailed;
-
-    private static float? GetIntelMsrPower()
-    {
-        if (_intelMsrPowerFailed || PawnIO.CpuInfo.IsAMD) return null;
-        try
-        {
-            if (_intelMsr == null)
-            {
-                var msr = new PawnIO.IntelMsr();
-                if (!msr.Initialize(typeof(HardwareControl).Assembly))
-                {
-                    msr.Dispose();
-                    _intelMsrPowerFailed = true;
-                    Logger.WriteLine("Intel MSR: PawnIO/IntelMSR module unavailable (not installed?)");
-                    return null;
-                }
-                _intelMsr = msr;
-                Logger.WriteLine("CPU Power source: Intel RAPL MSR (PawnIO)");
-            }
-            float? power = _intelMsr.GetPackagePower();
-            return power > 0 ? power : null;
-        }
-        catch (Exception ex)
-        {
-            _intelMsrPowerFailed = true;
-            Logger.WriteLine("Intel MSR power read failed: " + ex.Message);
             return null;
         }
     }
@@ -849,7 +710,6 @@ public static class HardwareControl
         ReadBatteryState();
     }
 
-    // Lightweight sensor read used by the overlay timer - skips battery health, WMI and design capacity
     public static void ReadSensorsOverlay()
     {
         if (Program.acpi is null) return;
@@ -872,8 +732,6 @@ public static class HardwareControl
         {
             cpuUsage = GetCPUUsage();
             try { gpuUsage = GpuControl?.GetGpuUse(); } catch { gpuUsage = null; }
-            if (isAMDiGPU && gpuUsage is null)
-                try { gpuUsage = AmdApu().GetiGpuSensors().use; } catch { }
         }
         else
         {
@@ -889,7 +747,7 @@ public static class HardwareControl
 
             try
             {
-                var vram = GpuControl?.GetVramInfo() ?? (isAMDiGPU ? AmdApu().GetVramInfo() : null);
+                var vram = GpuControl?.GetVramInfo();
                 if (vram is { } v && v.totalMb > 0)
                 {
                     vramUsedMb = (int)v.usedMb;
@@ -910,30 +768,7 @@ public static class HardwareControl
         if (readPower)
         {
             InitCPUPowerAsync();
-
-            float? newCpu = GetCPUPower() ?? GetIntelMsrPower() ?? GetAmdApuPower();
-            float? iGpuPower = null;
-
-            if (isAMDiGPU && GpuControl is null)
-            {
-                float? apu = _apuChannel?.Sample();
-                if (apu > 0) newCpu = apu;
-                float? cores = _cpuChannel?.Sample() ?? GetCoresPower();
-                if (cores > 0 && newCpu > cores)
-                {
-                    iGpuPower = newCpu - cores;
-                    newCpu = cores;
-                }
-                else
-                    try
-                    {
-                        var (_, _, gfxPower, corePower, asicPower) = AmdApu().GetiGpuSensors();
-                        if (gfxPower > 0) iGpuPower = gfxPower;
-                        if (corePower > 0) newCpu = corePower;
-                        else if (asicPower > gfxPower) newCpu = asicPower - gfxPower;
-                    }
-                    catch { }
-            }
+            float? newCpu = GetCPUPower() ?? GetAmdApuPower();
 
             if (newCpu > 0)
             {
@@ -946,7 +781,7 @@ public static class HardwareControl
                     cpuPower = null;
             }
 
-            gpuPower = iGpuPower ?? GetGPUPower();
+            gpuPower = GetGPUPower();
         }
         else
         {
@@ -984,7 +819,6 @@ public static class HardwareControl
         return false;
     }
 
-
     public static NvidiaGpuControl? GetNvidiaGpuControl()
     {
         if ((bool)GpuControl?.IsNvidia)
@@ -1018,8 +852,6 @@ public static class HardwareControl
 
     public static void RecreateGpuControlWithDelay(int delay = 5)
     {
-        // Re-enabling the discrete GPU takes a bit of time,
-        // so a simple workaround is to refresh again after that happens
         Task.Run(async () =>
         {
             await Task.Delay(TimeSpan.FromSeconds(delay));
@@ -1059,7 +891,6 @@ public static class HardwareControl
             if (_gpuControl.IsValid)
             {
                 GpuControl = _gpuControl;
-                if (GpuControl.FullName.Contains("6850M")) AppConfig.Set("xgm_special", 1);
                 Logger.WriteLine(GpuControl.FullName);
                 return;
             }
@@ -1067,8 +898,6 @@ public static class HardwareControl
 
             Logger.WriteLine("dGPU not found");
             GpuControl = null;
-
-
         }
         catch (Exception ex)
         {
@@ -1076,10 +905,8 @@ public static class HardwareControl
         }
     }
 
-
     public static void KillGPUApps()
     {
-
         List<string> tokill = new() { "EADesktop", "epicgameslauncher", "ASUSSmartDisplayControl" };
 
         foreach (string kill in tokill) ProcessHelper.KillByName(kill);

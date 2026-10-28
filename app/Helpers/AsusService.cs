@@ -1,4 +1,3 @@
-﻿using GHelper.Ally;
 using System.Diagnostics;
 using System.Management;
 
@@ -6,30 +5,34 @@ namespace GHelper.Helpers
 {
     public static class AsusService
     {
-
-        static List<string> services = new() {
-                "ArmouryCrateControlInterface",
-                "ArmouryCrateProArtService",
-                "AsHidService",
-                "ASUSOptimization",
-                "AsusAppService",
-                "ASUSLinkNear",
-                "ASUSLinkRemote",
-                "ASUSSoftwareManager",
-                "ASUSLiveUpdateAgent",
-                "ASUSSwitch",
-                "ASUSSystemAnalysis",
-                "ASUSSystemDiagnosis",
-                "ASUSXGMobileService",
-                "AsusCertService"
+        static List<string> services = new()
+        {
+            "ArmouryCrateControlInterface",
+            "ArmouryCrateProArtService",
+            "ArmouryCrateSEService",
+            "ArmouryCrateService",
+            "LightingService",
+            "AsHidService",
+            "ASUSOptimization",
+            "AsusAppService",
+            "AsusMultiAntennaSvc",
+            "AsusROGLSLService",
+            "ASUSLinkNear",
+            "ASUSLinkRemote",
+            "ASUSSoftwareManager",
+            "ASUSLiveUpdateAgent",
+            "ASUSSwitch",
+            "ASUSSystemAnalysis",
+            "ASUSSystemDiagnosis",
+            "ASUSXGMobileService",
+            "AsusCertService"
         };
 
-        //"AsusPTPService",
-
-        static List<string> servicesAC = new() {
-                "ArmouryCrateSEService",
-                "ArmouryCrateService",
-                "LightingService",
+        static List<string> servicesAC = new()
+        {
+            "ArmouryCrateSEService",
+            "ArmouryCrateService",
+            "LightingService",
         };
 
         private static bool IsRunning(string name)
@@ -56,14 +59,12 @@ namespace GHelper.Helpers
 
         public static bool IsOSDRunning() => IsRunning("AsusOSD");
 
-
         private static Dictionary<string, string> GetServiceStates()
         {
-            var names = AppConfig.IsStopAC() ? services.Concat(servicesAC) : services;
             var states = new Dictionary<string, string>();
             try
             {
-                string filter = string.Join(" OR ", names.Select(name => $"Name='{name}'"));
+                string filter = string.Join(" OR ", services.Select(name => $"Name='{name}'"));
                 using var searcher = new ManagementObjectSearcher($"SELECT Name, State FROM Win32_Service WHERE {filter}");
                 foreach (ManagementObject mo in searcher.Get())
                     states[(string)mo["Name"]] = (string)mo["State"];
@@ -85,7 +86,6 @@ namespace GHelper.Helpers
             return GetRunningServices().Count;
         }
 
-
         public static void StopAsusServices()
         {
             foreach (string service in GetRunningServices())
@@ -94,8 +94,6 @@ namespace GHelper.Helpers
             }
 
             if (GetRunningCount() == 0) AppConfig.Set("services_disabled", 1);
-
-            if (AppConfig.IsAlly()) AllyControl.ApplyMode((ControllerMode)AppConfig.Get("controller_mode", (int)ControllerMode.Auto), true);
         }
 
         public static void StartAsusServices()
@@ -120,7 +118,5 @@ namespace GHelper.Helpers
                 Program.inputDispatcher?.Init();
             });
         }
-
     }
-
 }

@@ -1,4 +1,4 @@
-﻿using GHelper.Display;
+using GHelper.Display;
 using GHelper.Gpu;
 using GHelper.Gpu.AMD;
 using GHelper.Helpers;
@@ -50,7 +50,7 @@ namespace GHelper
               {"touchscreen", Properties.Strings.ToggleTouchscreen },
               {"micmute", Properties.Strings.MuteMic},
               {"ghelper", Properties.Strings.OpenGHelper},
-              {"overlay", Properties.Strings.Overlay},
+
               {"custom", Properties.Strings.Custom}
             };
 
@@ -440,7 +440,7 @@ namespace GHelper
             sliderBrightness.AccessibleName = Properties.Strings.LaptopBacklight + ": " + sliderBrightness.Value;
             sliderBrightness.ValueChanged += SliderBrightness_ValueChanged;
 
-            panelXGM.Visible = XGM.IsConnected();
+            panelXGM.Visible = false;
             checkXGM.Checked = !(AppConfig.Get("xmg_light") == 0);
             checkXGM.CheckedChanged += CheckXGM_CheckedChanged;
 
@@ -495,8 +495,8 @@ namespace GHelper
             checkStandbyNetworking.Checked = AppConfig.IsAutoStandbyNetworking();
             checkStandbyNetworking.CheckedChanged += CheckStandbyNetworking_CheckedChanged;
 
-            checkKeystoneSound.Visible = AppConfig.IsKeystone();
-            checkKeystoneSound.Checked = Keystone.IsEnabled();
+            checkKeystoneSound.Visible = false;
+            checkKeystoneSound.Checked = false;
             checkKeystoneSound.CheckedChanged += CheckKeystoneSoundCheckedChanged;
 
             toolTip.SetToolTip(checkAutoToggleClamshellMode, Properties.Strings.ClamshellModeTooltip);
@@ -514,7 +514,7 @@ namespace GHelper
 
         private void CheckKeystoneSoundCheckedChanged(object? sender, EventArgs e)
         {
-            Keystone.SetEnabled(checkKeystoneSound.Checked);
+            // Keystone removed
         }
 
         private void CheckAspm_CheckedChanged(object? sender, EventArgs e)
@@ -658,13 +658,13 @@ namespace GHelper
 
                 comboAPU.SelectedIndex = Math.Max(0, Array.IndexOf(vramOptions, current));
             }
-            else if (IntelVram.Init())
+            else if (false)
             {
                 comboAPU.Items.Clear();
                 comboAPU.Items.Add(Properties.Strings.AutoMode);
-                foreach (int size in IntelVram.Sizes) comboAPU.Items.Add(size + "G");
+                // IntelVram removed
 
-                comboAPU.SelectedIndex = IntelVram.Index;
+                comboAPU.SelectedIndex = 0;
             }
             else
             {
@@ -685,13 +685,13 @@ namespace GHelper
         {
             int mem = comboAPU.SelectedIndex;
 
-            if (IntelVram.Supported && !ProcessHelper.IsUserAdministrator())
+            if (false)
             {
                 ProcessHelper.RunAsAdmin();
                 return;
             }
 
-            if (IntelVram.Supported) IntelVram.SetIndex(mem);
+            if (false) ;
             else if (vramOptions.Length == 0) Program.acpi.SetAPUMem(mem);
             else
             {
@@ -795,6 +795,7 @@ namespace GHelper
 
             labelServices.Text = Properties.Strings.AsusServicesRunning + ":  " + servicesCount;
             buttonServices.Enabled = true;
+            Program.settingsForm?.UpdateServicesStatus(servicesCount);
 
         }
 
@@ -852,7 +853,7 @@ namespace GHelper
         private void CheckXGM_CheckedChanged(object? sender, EventArgs e)
         {
             AppConfig.Set("xmg_light", (checkXGM.Checked ? 1 : 0));
-            XGM.Light(checkXGM.Checked);
+            // XGM removed
         }
 
         private void CheckELMB_CheckedChanged(object? sender, EventArgs e)

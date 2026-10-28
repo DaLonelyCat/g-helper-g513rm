@@ -7,7 +7,6 @@ using System.Text.RegularExpressions;
 
 public static class AppConfig
 {
-
     private static string configFile;
     private static string fallbackConfigFile;
 
@@ -36,7 +35,7 @@ public static class AppConfig
         : ProcessHelper.IsRunningAsSystem() && File.Exists(fallbackConfigFile) ? fallbackConfigFile
         : Path.Combine(appPath, configName);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(configFile));
+        Directory.CreateDirectory(Path.GetDirectoryName(configFile)!);
 
         if (!TryLoadConfig(configFile) && !TryRecoverConfig(configFile) && !TryLoadConfig(configFile + ".bak") && !TryLoadConfig(fallbackConfigFile)) Init();
 
@@ -48,7 +47,7 @@ public static class AppConfig
         if (!File.Exists(path)) return false;
         try
         {
-            config = JsonSerializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(path), LenientOptions);
+            config = JsonSerializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(path), LenientOptions)!;
             Logger.WriteLine($"Config loaded from {path}");
             return true;
         }
@@ -71,7 +70,7 @@ public static class AppConfig
             if (pairs.Count == 0) return false;
 
             string rebuilt = "{" + string.Join(",", pairs.Select(p => p.Key + ":" + p.Value)) + "}";
-            config = JsonSerializer.Deserialize<Dictionary<string, object>>(rebuilt, LenientOptions);
+            config = JsonSerializer.Deserialize<Dictionary<string, object>>(rebuilt, LenientOptions)!;
             Logger.WriteLine($"Recovered {pairs.Count} values from broken config {path}");
             return true;
         }
@@ -112,17 +111,15 @@ public static class AppConfig
         if (fallbackConfigFile is null || fallbackConfigFile == configFile) return;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(fallbackConfigFile));
+            Directory.CreateDirectory(Path.GetDirectoryName(fallbackConfigFile)!);
             File.Copy(configFile, fallbackConfigFile, overwrite: true);
         }
         catch (Exception)
         {
-            //Logger.WriteLine("Can't sync fallback config: " + ex.Message);
         }
     }
 
-    // Model Detection Routine
-
+    // G513RM Hardware Identification
     private static readonly Lazy<string> _model =
         new Lazy<string>(LoadModel, LazyThreadSafetyMode.ExecutionAndPublication);
 
@@ -136,14 +133,14 @@ public static class AppConfig
             using var searcher = new ManagementObjectSearcher("Select * from Win32_ComputerSystem");
             foreach (var obj in searcher.Get())
             {
-                using (obj) return obj["Model"]?.ToString() ?? string.Empty;
+                using (obj) return obj["Model"]?.ToString() ?? "ROG Strix G513RM";
             }
         }
         catch (Exception ex)
         {
             Logger.WriteLine(ex.Message);
         }
-        return string.Empty;
+        return "ROG Strix G513RM";
     }
 
     private static (string Bios, string ModelShort) LoadBios()
@@ -155,7 +152,7 @@ public static class AppConfig
             {
                 using (obj)
                 {
-                    string raw = obj["SMBIOSBIOSVersion"]?.ToString() ?? string.Empty;
+                    string raw = obj["SMBIOSBIOSVersion"]?.ToString() ?? "G513RM.327";
                     string[] parts = raw.Split('.');
                     return parts.Length > 1 ? (parts[1], parts[0]) : (string.Empty, raw);
                 }
@@ -165,19 +162,14 @@ public static class AppConfig
         {
             Logger.WriteLine(ex.Message);
         }
-        return (string.Empty, string.Empty);
+        return ("327", "G513RM");
     }
 
     public static string GetModel() => _model.Value;
 
     public static (string, string) GetBiosAndModel() => (_biosData.Value.Bios, _biosData.Value.ModelShort);
 
-    public static string GetModelShort()
-    {
-        string model = GetModel();
-        int trim = model.LastIndexOf('_');
-        return trim > 0 ? model[..trim] : model;
-    }
+    public static string GetModelShort() => "ROG Strix G513RM";
 
     public static bool ContainsModel(string contains)
         => _model.Value.Contains(contains, StringComparison.OrdinalIgnoreCase);
@@ -217,7 +209,7 @@ public static class AppConfig
         return Get(zone + "_bat", Get(zone)) != 0;
     }
 
-    public static string GetString(string name, string empty = null)
+    public static string? GetString(string name, string? empty = null)
     {
         lock (configLock)
             return config.TryGetValue(name, out var val) ? val?.ToString() : empty;
@@ -255,30 +247,19 @@ public static class AppConfig
     public static string GgetParamName(AsusFan device, string paramName = "fan_profile")
     {
         int mode = Modes.GetCurrent();
-        string name;
-
-        switch (device)
+        string name = device switch
         {
-            case AsusFan.GPU:
-                name = "gpu";
-                break;
-            case AsusFan.Mid:
-                name = "mid";
-                break;
-            case AsusFan.XGM:
-                name = "xgm";
-                break;
-            default:
-                name = "cpu";
-                break;
-        }
+            AsusFan.GPU => "gpu",
+            AsusFan.Mid => "mid",
+            _ => "cpu"
+        };
 
         return paramName + "_" + name + "_" + mode;
     }
 
     public static byte[] GetFanConfig(AsusFan device)
     {
-        string curveString = GetString(GgetParamName(device));
+        string? curveString = GetString(GgetParamName(device));
         byte[] curve = { };
 
         if (curveString is not null)
@@ -295,7 +276,7 @@ public static class AppConfig
 
     public static byte[] StringToBytes(string str)
     {
-        String[] arr = str.Split('-');
+        string[] arr = str.Split('-');
         byte[] array = new byte[arr.Length];
         for (int i = 0; i < arr.Length; i++) array[i] = Convert.ToByte(arr[i], 16);
         return array;
@@ -303,38 +284,11 @@ public static class AppConfig
 
     public static byte[] GetDefaultCurve(AsusFan device)
     {
-        int mode = Modes.GetCurrentBase();
-
-        switch (mode)
-        {
-            case AsusACPI.PerformanceTurbo:
-                switch (device)
-                {
-                    case AsusFan.GPU:
-                        return StringToBytes("1E-3F-44-48-4C-50-54-62-16-1F-26-2D-39-47-55-5F");
-                    default:
-                        return StringToBytes("1E-3F-44-48-4C-50-54-62-11-1A-22-29-34-43-51-5A");
-                }
-            case AsusACPI.PerformanceSilent:
-                switch (device)
-                {
-                    case AsusFan.GPU:
-                        return StringToBytes("1E-31-3B-42-47-50-5A-64-00-00-04-11-1B-23-28-2D");
-                    default:
-                        return StringToBytes("1E-31-3B-42-47-50-5A-64-00-00-03-0C-14-1C-22-29");
-                }
-            default:
-                switch (device)
-                {
-                    case AsusFan.GPU:
-                        return StringToBytes("3A-3D-40-44-48-4D-51-62-0C-16-1D-1F-26-2D-34-4A");
-                    default:
-                        return StringToBytes("3A-3D-40-44-48-4D-51-62-08-11-16-1A-22-29-30-45");
-                }
-        }
+        int mode = Modes.GetCurrent();
+        return G513Presets.GetCalibratedCurve(mode, device);
     }
 
-    public static string GetModeString(string name)
+    public static string? GetModeString(string name)
     {
         return GetString(name + "_" + Modes.GetCurrent());
     }
@@ -359,477 +313,98 @@ public static class AppConfig
         Set(name + "_" + Modes.GetCurrent(), value);
     }
 
-    public static bool IsAlly()
-    {
-        return ContainsModel("RC7");
-    }
+    // Hardcoded ROG Strix G513RM Hardware Profile Flags
+    public static bool IsStrix() => true;
+    public static bool IsROG() => true;
+    public static bool IsASUS() => true;
+    public static bool IsBacklightZones() => true;
+    public static bool IsStrix4ZoneFlipped() => true;
+    public static bool IsFanRequired() => true;
+    public static bool IsNumberPad() => true;
 
-    public static bool IsXboxAlly()
-    {
-        return ContainsModel("RC73");
-    }
-
-    public static bool IsAuraSync()
-    {
-        return Is("mouse_aura_sync");
-    }
-
-    public static bool IsKeyboardAuraSync()
-    {
-        return Is("keyboard_aura_sync");
-    }
-
-    public static bool IsHeadsetAuraSync()
-    {
-        return Is("headset_aura_sync");
-    }
-
-    public static bool NoMKeys()
-    {
-        return (ContainsModel("Z13") && !IsARCNM()) ||
-        ContainsModel("FX706") ||
-        ContainsModel("FA706") ||
-        ContainsModel("FA506") ||
-        ContainsModel("FX506") ||
-        ContainsModel("Duo") ||
-        ContainsModel("FX505");
-    }
-
-    public static bool IsARCNM()
-    {
-        return ContainsModel("GZ301VIC");
-    }
-
-    public static bool IsTUF()
-    {
-        return ContainsModel("TUF") || ContainsModel("TX Gaming") || ContainsModel("TX Air");
-    }
-
-    public static bool IsProArt()
-    {
-        return ContainsModel("ProArt");
-    }
-
-    public static bool IsVivoZenbook()
-    {
-        return ContainsModel("Vivobook") || ContainsModel("Zenbook") || ContainsModel("EXPERTBOOK") || ContainsModel(" V16") || ContainsModel("ASUSLaptop");
-    }
-
-    public static bool IsVivoZenPro()
-    {
-        return ContainsModel("Vivobook") || ContainsModel("Zenbook") || ContainsModel("ProArt") || ContainsModel("EXPERTBOOK") || ContainsModel(" V16") || ContainsModel("ASUSLaptop");
-    }
-
-    public static bool IsNumberPad()
-    {
-        return IsStrix() || IsVivoZenPro() || IsDUO();
-    }
-
-    public static bool IsHardwareFnLock()
-    {
-        return IsVivoZenPro() || ContainsModel("GZ302EA");
-    }
-
-    // Devices with bugged bios command to change brightness
-    public static bool SwappedBrightness()
-    {
-        return ContainsModel("FA506IEB") || ContainsModel("FA506IH") || ContainsModel("FA506IC") || ContainsModel("FA506II") || ContainsModel("FX506LU") || ContainsModel("FX506IC") || ContainsModel("FX506LH") || ContainsModel("FA506IV") || ContainsModel("FA706IC") || ContainsModel("FA706IH");
-    }
-
-    public static bool IsDUO()
-    {
-        return ContainsModel("Duo") || ContainsModel("GX550") || ContainsModel("GX551") || ContainsModel("GX650") || ContainsModel("UX840") || ContainsModel("UX482");
-    }
-
-    public static bool IsM4Button()
-    {
-        return IsDUO() || ContainsModel("GZ302EA");
-    }
-
-    // G14 2020 has no aura, but media keys instead
-    public static bool NoAura()
-    {
-        return (ContainsModel("GA401I") && !ContainsModel("GA401IHR")) || ContainsModel("GA502IU") || ContainsModel("HN7306") || ContainsModel("H760") || ContainsModel("M6500X");
-    }
-
-    public static bool MediaKeys()
-    {
-        return (ContainsModel("GA401I") && !ContainsModel("GA401IHR")) || ContainsModel("G712L") || ContainsModel("GX502L");
-    }
-
-    public static bool IsWhite()
-    {
-        return ContainsModel("GA401") || ContainsModel("FX517Z") || ContainsModel("FX516P") || ContainsModel("X13") || IsARCNM() || ContainsModel("FA617N") || ContainsModel("FA617X") || NoAura() || Is("no_rgb");
-    }
-
-    public static bool IsSleepBacklight()
-    {
-        return ContainsModel("FA617") || ContainsModel("FX507") || ContainsModel("FA507") || ContainsModel("FA401");
-    }
-
-    public static bool IsAnimeMatrix()
-    {
-        return ContainsModel("GA401") || ContainsModel("GA402") || ContainsModel("GU604V") || ContainsModel("GU604V") || ContainsModel("G835") || ContainsModel("G815") || ContainsModel("G635") || ContainsModel("G615");
-    }
-
-    public static bool IsSlash()
-    {
-        return ContainsModel("GA403") || ContainsModel("GU605") || ContainsModel("GA605") || IsSlashLong();
-    }
-
-    public static bool IsSlashLong()
-    {
-        return ContainsModel("GA405") || ContainsModel("GU405") || ContainsModel("GU606") || ContainsModel("GX651");
-    }
-
-    public static bool IsInvertedFNLock()
-    {
-        return ContainsModel("M140") || ContainsModel("S550") || ContainsModel("K650") || ContainsModel("P540") || IsTUF();
-    }
-
-    public static bool IsOLED()
-    {
-        return ContainsModel("OLED") || IsSlash() || ContainsModel("M7600") || ContainsModel("UX64") || ContainsModel("UX34") || ContainsModel("UX53") || ContainsModel("K360") || ContainsModel("X150") || ContainsModel("M340") || ContainsModel("M350") || ContainsModel("K650") || ContainsModel("UM53") || ContainsModel("K660") || ContainsModel("UX84") || ContainsModel("M650") || ContainsModel("M550") || ContainsModel("M540") || ContainsModel("K340") || ContainsModel("K350") || ContainsModel("M140") || ContainsModel("S540") || ContainsModel("S550") || ContainsModel("M7400") || ContainsModel("N650") || ContainsModel("HN7306") || ContainsModel("H760") || ContainsModel("UX5406") || ContainsModel("M5606") || ContainsModel("X513") || ContainsModel("N7400") || ContainsModel("UX760") || ContainsModel("Q530VJ") || ContainsModel("TP3407") || ContainsModel("HT7407") || ContainsModel("3607") || _oledFromRegistry.Value;
-    }
-
-    private static readonly Lazy<bool> _oledFromRegistry = new(() =>
-    {
-        try
-        {
-            var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\ASUS\OLEDCare");
-            return key is not null && Convert.ToInt32(key.GetValue("EnablePixelRefresh", 0)) != 0;
-        }
-        catch { return false; }
-    });
-
-    public static bool IsNoOverdrive()
-    {
-        return Is("no_overdrive");
-    }
-
-    public static bool IsStrix()
-    {
-        return ContainsModel("Strix") || ContainsModel("Scar") || ContainsModel("G703G");
-    }
-
-    public static bool IsEcoBootFix()
-    {
-        return ContainsModel("G635L") || ContainsModel("G615L") || ContainsModel("G835L") || ContainsModel("G815L") || ContainsModel("FA506") || ContainsModel("FX608");
-    }
-
-    public static bool IsELMB()
-    {
-        return ContainsModel("G835LX") || ContainsModel("G835LWG");
-    }
-
-    public static bool IsStandardForceFix()
-    {
-        return (ContainsModel("GU605") || ContainsModel("H7606")) && IsNotFalse("standard_force_fix");
-    }
-
-    public static bool IsBacklightZones()
-    {
-        return IsStrix() || IsZ13();
-    }
-
-    public static bool IsLampArray()
-    {
-        return ContainsModel("G614") || ContainsModel("G615") || ContainsModel("G634") || ContainsModel("G635") || ContainsModel("G814") || ContainsModel("G815") || ContainsModel("G834") || ContainsModel("G835") || IsSlash();
-    }
-
-    public static bool IsHardwareHotkeys()
-    {
-        return ContainsModel("FX506");
-    }
-
-    public static bool NoWMI()
-    {
-        return ContainsModel("GL704G") || ContainsModel("GM501G") || ContainsModel("GX501G");
-    }
-
-    public static bool IsNoDirectRGB()
-    {
-        return ContainsModel("GA503") || ContainsModel("G533Q") || ContainsModel("GU502") || IsSlash();
-    }
-
-    public static bool IsStrixNumpad()
-    {
-        return ContainsModel("G713R");
-    }
-
-    public static bool IsStrix4ZoneFlipped()
-    {
-        return ContainsModel("G513");
-    }
-
-    public static bool IsZ1325()
-    {
-        return ContainsModel("GZ302E");
-    }
-
-    public static bool IsZ13()
-    {
-        return ContainsModel("Z13");
-    }
-
-    public static bool IsDetachableKeyboard()
-    {
-        return ContainsModel("Z13") || ContainsModel("UX8406") || ContainsModel("UX8407");
-    }
-
-    public static bool HasRearLight()
-    {
-        return IsZ13();
-    }
-
-    public static bool IsPZ13()
-    {
-        return ContainsModel("PZ13");
-    }
-
-    public static bool IsS17()
-    {
-        return ContainsModel("S17");
-    }
-
-    public static bool HasTabletMode()
-    {
-        return ContainsModel("X16") || ContainsModel("X13") || ContainsModel("Z13");
-    }
-
-    public static bool IsX13()
-    {
-        return ContainsModel("X13");
-    }
-
-    public static bool IsG14AMD()
-    {
-        return ContainsModel("GA402R");
-    }
-
-    public static bool DynamicBoost5()
-    {
-        return ContainsModel("GZ301ZE");
-    }
-
-    public static bool DynamicBoost15()
-    {
-        return ContainsModel("FX507ZC4") || ContainsModel("GA403UM") || ContainsModel("GU605CP") || ContainsModel("FX608J") || ContainsModel("FX608L") || ContainsModel("FA608U") || ContainsModel("FA608P") ||
-        ContainsModel("FA401K") || ContainsModel("FA401UM") || ContainsModel("FA401UH") ||
-        ContainsModel("GA403GM") || ContainsModel("GU405AM") || ContainsModel("GU405AP") || ContainsModel("GU606AM") || ContainsModel("GU606AP");
-    }
-
-    public static bool DynamicBoost20()
-    {
-        return ContainsModel("GU605") || ContainsModel("GA605") || ContainsModel("GU405");
-    }
-
-    public static bool IsAdvantageEdition()
-    {
-        return ContainsModel("13QY");
-    }
-
-    public static bool IsAlwaysUltimate()
-    {
-        return ContainsModel("FA507NUR") || ContainsModel("FA506NCR") || ContainsModel("FA507NVR");
-    }
+    public static bool IsAlly() => false;
+    public static bool IsXboxAlly() => false;
+    public static bool IsAuraSync() => false;
+    public static bool IsKeyboardAuraSync() => false;
+    public static bool IsHeadsetAuraSync() => false;
+    public static bool NoMKeys() => false;
+    public static bool IsARCNM() => false;
+    public static bool IsTUF() => false;
+    public static bool IsProArt() => false;
+    public static bool IsVivoZenbook() => false;
+    public static bool IsVivoZenPro() => false;
+    public static bool IsHardwareFnLock() => false;
+    public static bool SwappedBrightness() => false;
+    public static bool IsDUO() => false;
+    public static bool IsM4Button() => false;
+    public static bool NoAura() => false;
+    public static bool MediaKeys() => false;
+    public static bool IsWhite() => Is("no_rgb");
+    public static bool IsSleepBacklight() => false;
+    public static bool IsAnimeMatrix() => false;
+    public static bool IsSlash() => false;
+    public static bool IsSlashLong() => false;
+    public static bool IsInvertedFNLock() => false;
+    public static bool IsOLED() => false;
+    public static bool IsNoOverdrive() => Is("no_overdrive");
+    public static bool IsEcoBootFix() => false;
+    public static bool IsELMB() => false;
+    public static bool IsStandardForceFix() => false;
+    public static bool IsLampArray() => false;
+    public static bool IsHardwareHotkeys() => false;
+    public static bool NoWMI() => false;
+    public static bool IsNoDirectRGB() => false;
+    public static bool IsStrixNumpad() => false;
+    public static bool IsZ1325() => false;
+    public static bool IsZ13() => false;
+    public static bool IsDetachableKeyboard() => false;
+    public static bool HasRearLight() => false;
+    public static bool IsPZ13() => false;
+    public static bool IsS17() => false;
+    public static bool HasTabletMode() => false;
+    public static bool IsX13() => false;
+    public static bool IsG14AMD() => false;
+    public static bool DynamicBoost5() => false;
+    public static bool DynamicBoost15() => false;
+    public static bool DynamicBoost20() => false;
+    public static bool IsAdvantageEdition() => false;
+    public static bool IsAlwaysUltimate() => false;
 
     public static bool IsApplyPower() => IsMode("auto_apply_power");
     public static bool IsApplyFans() => IsMode("auto_apply");
     public static bool IsApplyUV() => IsMode("auto_uv");
 
-    public static bool IsManualModeRequired()
-    {
-        if (!IsApplyPower()) return false;
-        return Is("manual_mode") || ContainsModel("G733");
-    }
-
-    public static bool IsResetRequired()
-    {
-        return ContainsModel("GA403UI") || ContainsModel("GA403UU") || ContainsModel("GA403UV") || ContainsModel("FA507XV");
-    }
-
-    public static bool IsFanRequired()
-    {
-        return ContainsModel("GA402X") || ContainsModel("GU604") || ContainsModel("G513") || ContainsModel("G713R") || ContainsModel("G713P") || ContainsModel("GU605") || ContainsModel("GA605") || ContainsModel("G634J") || ContainsModel("G834J") || ContainsModel("G614J") || ContainsModel("G814J") || ContainsModel("FX507V") || ContainsModel("FX507Z") || ContainsModel("FX608") || ContainsModel("FA608P") || ContainsModel("G614F") || ContainsModel("G614R") || ContainsModel("G733") || ContainsModel("H7606");
-    }
-
-    public static bool IsCPULight()
-    {
-        return ContainsModel("GA402X") || ContainsModel("GA605") || ContainsModel("GA403") || ContainsModel("FA507N") || GetModelShort().Contains("FA507X") || ContainsModel("FA707N") || ContainsModel("FA707X") || ContainsModel("GZ302") || ContainsModel("GU405") || ContainsModel("GX651");
-    }
-
-    public static bool IsPowerRequired()
-    {
-        return ContainsModel("GU605M") || ContainsModel("FX507") || ContainsModel("FX517") || ContainsModel("FX707");
-    }
-
-    public static bool IsModeReapply()
-    {
-        return IsNotFalse("mode_reapply");
-    }
-
-    public static bool IsStandardModeFix()
-    {
-        return Is("shutdown_gpu") || ((ContainsModel("FX506HC") || ContainsModel("FA808U")) && IsNotFalse("shutdown_gpu"));
-    }
-
-    public static bool IsShutdownReset()
-    {
-        return Is("shutdown_reset") || ContainsModel("FX507Z");
-    }
-
-    public static bool IsNVPlatform()
-    {
-        return Is("nv_platform");
-    }
-
-    public static bool IsForceSetGPUMode()
-    {
-        return Is("gpu_mode_force_set") || (ContainsModel("503") && IsNotFalse("gpu_mode_force_set"));
-    }
-
-    public static bool IsAMDiGPU()
-    {
-        return ContainsModel("GV301RA") || ContainsModel("GV302XA") || ContainsModel("GZ302") || IsOnlyAIMAX() || IsAlly();
-    }
-
-    public static bool NoGpu()
-    {
-        return Is("no_gpu") || ContainsModel("UX540") || ContainsModel("M560") || ContainsModel("GZ302") || IsOnlyAIMAX();
-    }
-
-    public static bool IsOnlyAIMAX()
-    {
-        return ContainsModel("FA401EA") || ContainsModel("HN7306EA");
-    }
-
-    public static bool IsHardwareTouchpadToggle()
-    {
-        return GetModelShort().Contains("FA507");
-    }
-
-    public static bool IsIntelHX()
-    {
-        return ContainsModel("G814") || ContainsModel("G614") || ContainsModel("G834") || ContainsModel("G634") || ContainsModel("G835") || ContainsModel("G635") || ContainsModel("G815") || ContainsModel("G615");
-    }
-
-    public static bool Is8Ecores()
-    {
-        return ContainsModel("FX507Z") || ContainsModel("GU603ZV");
-    }
-
-    public static bool IsNoFNV()
-    {
-        return ContainsModel("FX507") || ContainsModel("FX707");
-    }
-
-    public static bool IsROG()
-    {
-        return ContainsModel("ROG");
-    }
-    public static bool IsDesktop()
-    {
-        try
-        {
-            using var searcher = new ManagementObjectSearcher("Select * from Win32_ComputerSystem");
-            foreach (var obj in searcher.Get())
-            {
-                using (obj) return Convert.ToInt32(obj["PCSystemType"] ?? 0) == 1;
-            }
-        }
-        catch { }
-        return false;
-    }
-
-    public static bool IsASUS()
-    {
-        return ContainsModel("ROG") || ContainsModel("TUF") || ContainsModel("Vivobook") || ContainsModel("Zenbook");
-    }
-
-    public static bool IsBWIcon()
-    {
-        return Is("bw_icon");
-    }
-
-    public static bool IsOverlay()
-    {
-        return Is("overlay");
-    }
-
-    public static bool IsOverlayGameOnly()
-    {
-        return Is("overlay_game_only");
-    }
-
-    public static bool IsStopAC()
-    {
-        return IsAlly() || Is("stop_ac");
-    }
-
-    public static bool IsChargeLimit6080()
-    {
-        return ContainsModel("GU405") || ContainsModel("GU606") || ContainsModel("H760") || ContainsModel("GA403") || ContainsModel("GU605") || ContainsModel("GA605") || ContainsModel("GA503R") || (IsTUF() && !(ContainsModel("FX507Z") || ContainsModel("FA617") || ContainsModel("FA607") || ContainsModel("FX607")));
-
-    }
-
-    // 2024 Models support Dynamic Lighting
-    public static bool IsDynamicLighting()
-    {
-        return IsSlash() || IsIntelHX() || IsTUF() || IsZ13();
-    }
-
-    public static bool IsDynamicLightingOnly()
-    {
-        return ContainsModel("S560") || ContainsModel("M540") || ContainsModel("UX760");
-    }
-
-    public static bool IsDynamicLightingInit()
-    {
-        return ContainsModel("FA608") || Is("lighting_init");
-    }
-
-    public static bool IsForceMiniled()
-    {
-        return ContainsModel("G834JYR") || ContainsModel("G834JZR") || ContainsModel("G634JZR") || ContainsModel("G835L") || ContainsModel("G635L") || Is("force_miniled");
-    }
-
-    public static bool IsKeystone()
-    {
-        return ContainsModel("G531") || ContainsModel("G731") ||
-               ContainsModel("G532") || ContainsModel("G732") ||
-               ContainsModel("G533") || ContainsModel("G733");
-    }
-
-    public static bool IsSleepReset()
-    {
-        return Is("sleep_reset") || ContainsModel("GU605MI") || ContainsModel("GU605MV") || ContainsModel("GU605CR");
-    }
-
-    public static bool SaveDimming()
-    {
-        return Is("save_dimming");
-    }
-
-    public static bool IsAutoStatusLed()
-    {
-        return Is("auto_status_led");
-    }
-
-    public static bool IsClampFanDots()
-    {
-        return IsNotFalse("fan_clamp");
-    }
-
-    public static bool IsAutoASPM()
-    {
-        return IsNotFalse("aspm");
-    }
-
-    public static bool IsAutoStandbyNetworking()
-    {
-        return IsNotFalse("standby_networking");
-    }
-
-
+    public static bool IsManualModeRequired() => IsApplyPower() && Is("manual_mode");
+    public static bool IsResetRequired() => false;
+    public static bool IsCPULight() => false;
+    public static bool IsPowerRequired() => false;
+    public static bool IsModeReapply() => IsNotFalse("mode_reapply");
+    public static bool IsStandardModeFix() => Is("shutdown_gpu");
+    public static bool IsShutdownReset() => Is("shutdown_reset");
+    public static bool IsNVPlatform() => Is("nv_platform");
+    public static bool IsForceSetGPUMode() => Is("gpu_mode_force_set");
+    public static bool IsAMDiGPU() => false;
+    public static bool NoGpu() => Is("no_gpu");
+    public static bool IsOnlyAIMAX() => false;
+    public static bool IsHardwareTouchpadToggle() => false;
+    public static bool IsIntelHX() => false;
+    public static bool Is8Ecores() => false;
+    public static bool IsNoFNV() => false;
+    public static bool IsDesktop() => false;
+    public static bool IsBWIcon() => Is("bw_icon");
+    public static bool IsOverlay() => false;
+    public static bool IsOverlayGameOnly() => false;
+    public static bool IsStopAC() => Is("stop_ac");
+    public static bool IsChargeLimit6080() => false;
+    public static bool IsDynamicLighting() => false;
+    public static bool IsDynamicLightingOnly() => false;
+    public static bool IsDynamicLightingInit() => false;
+    public static bool IsForceMiniled() => false;
+    public static bool IsKeystone() => false;
+    public static bool IsSleepReset() => Is("sleep_reset");
+    public static bool SaveDimming() => Is("save_dimming");
+    public static bool IsAutoStatusLed() => Is("auto_status_led");
+    public static bool IsClampFanDots() => IsNotFalse("fan_clamp");
+    public static bool IsAutoASPM() => IsNotFalse("aspm");
+    public static bool IsAutoStandbyNetworking() => IsNotFalse("standby_networking");
 }

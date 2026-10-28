@@ -1,9 +1,9 @@
 using GHelper.Display;
 using GHelper.Helpers;
 using GHelper.Mode;
-using GHelper.Peripherals;
-using GHelper.Peripherals.Keyboard;
-using GHelper.Peripherals.Mouse;
+
+
+
 using GHelper.USB;
 using Microsoft.Win32;
 using System.Diagnostics;
@@ -218,24 +218,25 @@ namespace GHelper.Input
                 hook.RegisterHotKey(ModifierKeys.None, Keys.Down);
             }
 
-            foreach (ushort code in GetActiveMouseComboCarriers())
-                hook.RegisterHotKey(ModifierKeys.None, Keys.F13 + (code - 0x0068));
+            // External mouse combo carriers removed for G513RM edition
+                if (false) hook.RegisterHotKey(ModifierKeys.None, Keys.F13);
 
-            for (int slot = 0; slot < AsusKeyboard.LaunchSlots; slot++)
-                if (AsusKeyboard.LaunchCommand(slot).Length > 0)
+            for (int slot = 0; slot < 0; slot++)
+                if (false)
                     hook.RegisterHotKey(ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt, Keys.F1 + slot);
 
         }
 
-        private static IEnumerable<ushort> GetActiveMouseComboCarriers()
+        private static IEnumerable<ushort> GetActiveMouseComboCarriers() => Array.Empty<ushort>();
+        private static void UnusedMouseStub()
         {
             var seen = new HashSet<ushort>();
-            foreach (var m in PeripheralsProvider.SnapshotMice())
+            if (false)
             {
-                if (!m.HasButtonBindings() || m.ButtonBindings is null) continue;
-                foreach (ushort code in m.ButtonBindings)
-                    if (AsusMouse.CombosByCode.ContainsKey(code) && seen.Add(code))
-                        yield return code;
+                // removed
+                // removed
+                    // removed
+                        return;
             }
         }
 
@@ -337,9 +338,9 @@ namespace GHelper.Input
             Logger.WriteLine(e.Key.ToString() + " " + e.Modifier.ToString());
 
             if (e.Modifier == (ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)
-                && e.Key >= Keys.F1 && e.Key < Keys.F1 + AsusKeyboard.LaunchSlots)
+                && false)
             {
-                string command = AsusKeyboard.LaunchCommand(e.Key - Keys.F1);
+                string command = "";
                 if (command.Length > 0)
                 {
                     LaunchProcess(command);
@@ -352,9 +353,9 @@ namespace GHelper.Input
                 if (e.Key >= Keys.F13 && e.Key <= Keys.F24)
                 {
                     ushort code = (ushort)(0x68 + (e.Key - Keys.F13));
-                    if (AsusMouse.CombosByCode.TryGetValue(code, out var combo))
+                    if (false)
                     {
-                        RunKeyCommand(combo.ResolveCommand(), launchOnNoKeys: false);
+                        return;
                         return;
                     }
                 }
@@ -514,8 +515,8 @@ namespace GHelper.Input
                 if (e.Key == keyProfile2) modeControl.SetPerformanceMode(2, true);
                 if (e.Key == keyProfile3) modeControl.SetPerformanceMode(3, true);
                 if (e.Key == keyProfile4) modeControl.SetPerformanceMode(4, true);
-                if (e.Key == keyXGM) Program.settingsForm.gpuControl.ToggleXGM(true);
-                if (e.Key == keyOverlay) Program.settingsForm.BeginInvoke(() => Program.settingsForm.ToggleOverlay(true));
+                // XGM and Overlay hotkeys removed for G513RM edition
+                // Overlay removed
 
                 switch (e.Key)
                 {
@@ -526,10 +527,10 @@ namespace GHelper.Input
                         SetBrightness(true);
                         break;
                     case Keys.F3:
-                        Program.settingsForm.gpuControl.ToggleXGM(true);
+                        break;
                         break;
                     case Keys.F4:
-                        Program.settingsForm.BeginInvoke(Program.settingsForm.allyControl.ToggleModeHotkey);
+                        break;
                         break;
                     case Keys.F6:
                         ToggleTouchScreen();
@@ -543,7 +544,7 @@ namespace GHelper.Input
                         else SetBrightnessDimming(10);
                         break;
                     case Keys.F9:
-                        Program.settingsForm.BeginInvoke(Program.settingsForm.allyControl.ToggleFPSLimit, true);
+                        break;
                         break;
                     case Keys.F13:
                         ToggleScreenRate();
@@ -688,7 +689,7 @@ namespace GHelper.Input
                     ToggleFnLock();
                     break;
                 case "overlay":
-                    Program.settingsForm.BeginInvoke(() => Program.settingsForm.ToggleOverlay(true));
+                    break;
                     break;
                 case "micmute":
                     ToggleMic();
@@ -712,7 +713,7 @@ namespace GHelper.Input
                     LaunchProcess("calc");
                     break;
                 case "controller":
-                    Program.settingsForm.BeginInvoke(Program.settingsForm.allyControl.ToggleModeHotkey);
+                    break;
                     break;
                 case "touchscreen":
                     ToggleTouchScreen();
@@ -913,11 +914,11 @@ namespace GHelper.Input
                     // This is both the M1 and M2 keys.
                     // There's a way to differentiate, apparently, but it isn't over USB or any other obvious protocol.
                     case 165:
-                        Program.settingsForm.BeginInvoke(() => Program.hardwareOverlay?.SetDragKey(true));
+                        KeyProcess("paddle");
                         KeyProcess("paddle");
                         return;
                     case 0:
-                        Program.settingsForm.BeginInvoke(() => Program.hardwareOverlay?.SetDragKey(false));
+                        return;
                         return;
                     // The Command Center ("play-looking") button below the select key.
                     case 166:
@@ -1020,7 +1021,7 @@ namespace GHelper.Input
                     if (Control.ModifierKeys == Keys.Shift)
                     {
                         if (AppConfig.IsDUO()) SetScreenpad(-10);
-                        else if (Program.settingsForm.matrixControl.IsValid) Program.settingsForm.BeginInvoke(Program.settingsForm.CycleMatrix, -1);
+                        else if (false) { }
                         else SetBacklight(-1);
                     }
                     else if (Control.ModifierKeys == Keys.Control && AppConfig.IsOLED())
@@ -1036,7 +1037,7 @@ namespace GHelper.Input
                     if (Control.ModifierKeys == Keys.Shift)
                     {
                         if (AppConfig.IsDUO()) SetScreenpad(10);
-                        else if (Program.settingsForm.matrixControl.IsValid) Program.settingsForm.BeginInvoke(Program.settingsForm.CycleMatrix, 1);
+                        else if (false) { }
                         else SetBacklight(1);
                     }
                     else if (Control.ModifierKeys == Keys.Control && AppConfig.IsOLED())
@@ -1407,7 +1408,7 @@ namespace GHelper.Input
                 if (AppConfig.NoWMI()) return;
 
                 if (EventID == 123) Program.OnChargerEvent();
-                if (EventID == 186 || EventID == 194) Program.settingsForm.VisualizeXGM();
+                // XGM removed
 
                 HandleEvent(EventID);
             }

@@ -1,4 +1,4 @@
-﻿using GHelper.Helpers;
+using GHelper.Helpers;
 using Microsoft.Win32;
 using System.Diagnostics;
 
@@ -6,7 +6,6 @@ namespace GHelper.Display
 {
     public static class ScreenControl
     {
-
         public const int MAX_REFRESH = 1000;
         public static int MIN_RATE = AppConfig.Get("min_rate", 60);
         public static int MAX_RATE = AppConfig.Get("max_rate");
@@ -17,25 +16,18 @@ namespace GHelper.Display
             else return ScreenNative.GetMaxRefreshRate(laptopScreen);
         }
 
+        // Strict Manual Display Policy for G513RM Edition:
+        // Never auto-switch refresh rates on AC/Battery or GPU transitions.
         public static void AutoScreen(bool force = false)
         {
-            if (force || AppConfig.Is("screen_auto"))
-            {
-                if (SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online)
-                    SetScreen(MAX_REFRESH, 1);
-                else
-                    SetScreen(MIN_RATE, 0);
-            }
-            else
-            {
-                SetScreen(overdrive: AppConfig.Get("overdrive"));
-            }
+            AppConfig.Set("screen_auto", 0);
+            InitScreen();
         }
 
         public static void SetAutoRefresh(int auto)
         {
-            AppConfig.Set("screen_auto", auto);
-            if (auto == 0) SetAsusRefreshFlag(0);
+            AppConfig.Set("screen_auto", 0);
+            SetAsusRefreshFlag(0);
         }
 
         public static void SetAsusRefreshFlag(int value)
@@ -62,7 +54,6 @@ namespace GHelper.Display
             ScreenNative.SetRefreshRate(laptopScreen, refreshRate > MIN_RATE ? MIN_RATE : GetMaxRate(laptopScreen));
             InitScreen();
         }
-
 
         public static void SetScreen(int frequency = -1, int overdrive = -1, int miniled = -1)
         {
@@ -111,21 +102,10 @@ namespace GHelper.Display
 
         public static void InitMiniled()
         {
-            if (AppConfig.IsForceMiniled())
-            {
-                if (ScreenCCD.IsHDR()) SetHDRControl(AppConfig.Get("hdr_control"));
-                else SetMiniled(AppConfig.Get("miniled"));
-            }
-
-            InitELMB();
         }
 
         public static void InitELMB()
         {
-            if (!AppConfig.IsELMB()) return;
-
-            int elmb = AppConfig.Get("elmb");
-            if (elmb >= 0 && !ScreenCCD.IsHDR()) ScreenELMB.Set(elmb);
         }
 
         public static void InitOptimalBrightness()
@@ -148,15 +128,6 @@ namespace GHelper.Display
 
         public static void ToogleFHD()
         {
-            int fhd = Program.acpi.DeviceGet(AsusACPI.ScreenFHD);
-            Logger.WriteLine($"FHD Toggle: {fhd}");
-
-            DialogResult dialogResult = MessageBox.Show("Changing display mode requires reboot", Properties.Strings.AlertUltimateTitle, MessageBoxButtons.YesNo);
-            if (dialogResult == DialogResult.Yes)
-            {
-                Program.acpi.DeviceSet(AsusACPI.ScreenFHD, (fhd == 1) ? 0 : 1, "FHD");
-                Process.Start("shutdown", "/r /t 1");
-            }
         }
 
         public static void SetHDRControl(int status = -1)
@@ -179,51 +150,7 @@ namespace GHelper.Display
 
         public static string ToogleMiniled()
         {
-            int miniled1 = Program.acpi.DeviceGet(AsusACPI.ScreenMiniled1);
-            int miniled2 = Program.acpi.DeviceGet(AsusACPI.ScreenMiniled2);
-
-            Logger.WriteLine($"MiniledToggle: {miniled1} {miniled2}");
-
-            int miniled;
-            string name;
-
-            if (miniled1 >= 0)
-            {
-                switch (miniled1)
-                {
-                    case 1: 
-                        miniled = 0;
-                        name = Properties.Strings.OneZone;
-                        break;
-                    default:
-                        miniled = 1;
-                        name = Properties.Strings.Multizone;
-                        break;
-                }
-            }
-            else
-            {
-                switch (miniled2)
-                {
-                    case 1: 
-                        miniled = 2;
-                        name = Properties.Strings.OneZone;
-                        break;
-                    case 2: 
-                        miniled = 0;
-                        name = Properties.Strings.Multizone;
-                        break;
-                    default: 
-                        miniled = 1;
-                        name = Properties.Strings.MultizoneStrong;
-                        break;
-                }
-            }
-
-            AppConfig.Set("miniled", miniled);
-            SetScreen(miniled: miniled);
-            
-            return name;
+            return string.Empty;
         }
 
         public static void InitScreen()
@@ -235,42 +162,26 @@ namespace GHelper.Display
             if (maxFrequency > 0) AppConfig.Set("max_frequency", maxFrequency);
             else maxFrequency = AppConfig.Get("max_frequency");
 
-            bool screenAuto = AppConfig.Is("screen_auto");
+            bool screenAuto = false;
             bool overdriveSetting = Program.acpi.IsOverdriveSupported() && !AppConfig.IsNoOverdrive();
 
             int overdrive = overdriveSetting ? Program.acpi.DeviceGet(AsusACPI.ScreenOverdrive) : 0;
 
-            int miniled1 = Program.acpi.DeviceGet(AsusACPI.ScreenMiniled1);
-            int miniled2 = Program.acpi.DeviceGet(AsusACPI.ScreenMiniled2);
-
-            int miniled = (miniled1 >= 0) ? miniled1 : miniled2;
             bool hdr = false;
             bool acm = false;
-
-            if (miniled >= 0)
-            {
-                Logger.WriteLine($"Miniled: {miniled1} {miniled2}");
-                AppConfig.Set("miniled", miniled);
-            }
 
             try
             {
                 hdr = ScreenCCD.GetHDRStatus(out acm);
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Logger.WriteLine(ex.Message);
             }
 
             bool screenEnabled = (frequency >= 0);
 
-            int fhd = -1;
-            if (AppConfig.IsDUO())
-            {
-                fhd = Program.acpi.DeviceGet(AsusACPI.ScreenFHD);
-            }
-
             int hdrControl = Program.acpi.DeviceGet(AsusACPI.ScreenHDRControl);
-            if (hdrControl >= 0) Logger.WriteLine($"HDR Control Status: {hdrControl}");
 
             AppConfig.Set("frequency", frequency);
             AppConfig.Set("overdrive", overdrive);
@@ -284,15 +195,14 @@ namespace GHelper.Display
                     maxFrequency: maxFrequency,
                     overdrive: overdrive,
                     overdriveSetting: overdriveSetting,
-                    miniled1: miniled1,
-                    miniled2: miniled2,
+                    miniled1: -1,
+                    miniled2: -1,
                     hdr: hdr,
                     acm: acm,
-                    fhd: fhd,
+                    fhd: -1,
                     hdrControl: hdrControl
                 );
             });
-
         }
     }
 }

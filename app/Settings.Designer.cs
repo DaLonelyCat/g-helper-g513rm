@@ -1,4 +1,4 @@
-﻿using GHelper.UI;
+using GHelper.UI;
 
 namespace GHelper
 {
@@ -2061,6 +2061,7 @@ namespace GHelper
             // 
             // SettingsForm
             // 
+            InitG513RMControls();
             AutoScaleDimensions = new SizeF(192F, 192F);
             AutoScaleMode = AutoScaleMode.Dpi;
             AutoSize = true;
@@ -2079,6 +2080,7 @@ namespace GHelper
             Controls.Add(panelScreen);
             Controls.Add(panelGPU);
             Controls.Add(panelPerformance);
+            Controls.Add(panelTelemetry);
             Margin = new Padding(8, 4, 8, 4);
             MaximizeBox = false;
             MdiChildrenMinimizedAnchorBottom = false;

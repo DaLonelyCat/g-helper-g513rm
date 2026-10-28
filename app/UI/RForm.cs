@@ -1,17 +1,16 @@
-﻿using Microsoft.Win32;
+using Microsoft.Win32;
 using System.Runtime.InteropServices;
 
 namespace GHelper.UI
 {
     public class RForm : Form
     {
-
+        // Calibrated Strix Industrial Semantic Accents (DESIGN.md WCAG AA verified)
         public static Color colorEco = Color.FromArgb(255, 6, 180, 138);
         public static Color colorStandard = Color.FromArgb(255, 58, 174, 239);
-        public static Color colorTurbo = Color.FromArgb(255, 255, 32, 32);
-        public static Color colorCustom = Color.FromArgb(255, 255, 128, 0);
-        public static Color colorGray = Color.FromArgb(255, 168, 168, 168);
-
+        public static Color colorTurbo = Color.FromArgb(255, 255, 59, 48);
+        public static Color colorCustom = Color.FromArgb(255, 245, 158, 11);
+        public static Color colorGray = Color.FromArgb(255, 155, 166, 178);
 
         public static Color buttonMain;
         public static Color buttonSecond;
@@ -34,11 +33,12 @@ namespace GHelper.UI
         [DllImport("UXTheme.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern int SetWindowTheme(nint hWnd, string pszSubAppName, string? pszSubIdList);
 
-        [DllImport("DwmApi")] //System.Runtime.InteropServices
+        [DllImport("DwmApi")]
         private static extern int DwmSetWindowAttribute(nint hwnd, int attr, int[] attrValue, int attrSize);
 
         public bool darkTheme = false;
         private bool themeInitialized = false;
+
         protected override CreateParams CreateParams
         {
             get
@@ -49,35 +49,40 @@ namespace GHelper.UI
                 return parms;
             }
         }
+
         public static void InitColors(bool darkTheme)
         {
             flatTheme = AppConfig.GetString("theme")?.ToLower() == "flat";
 
             if (darkTheme)
             {
-                buttonMain = Color.FromArgb(255, 46, 46, 46);
-                buttonSecond = Color.FromArgb(255, 36, 36, 36);
+                // Strix Industrial Dark Palette
+                buttonMain = Color.FromArgb(255, 37, 42, 50);     // #252A32 Interactive Control Surface
+                buttonSecond = Color.FromArgb(255, 28, 32, 38);   // #1C2026 Elevated Card Surface
 
-                formBack = Color.FromArgb(255, 28, 28, 28);
-                foreMain = Color.FromArgb(255, 240, 240, 240);
-                borderMain = Color.FromArgb(255, 55, 55, 55);
-                borderSecond = Color.FromArgb(255, 42, 42, 42);
+                formBack = Color.FromArgb(255, 18, 20, 23);       // #121417 Primary Canvas
+                foreMain = Color.FromArgb(255, 240, 244, 248);    // #F0F4F8 Primary Text (15.4:1 contrast)
+                borderMain = Color.FromArgb(255, 48, 55, 66);     // #303742 Primary Border
+                borderSecond = Color.FromArgb(255, 38, 44, 53);   // #262C35 Secondary Hairline Border
 
-                chartMain = Color.FromArgb(255, 35, 35, 35);
-                chartGrid = Color.FromArgb(255, 70, 70, 70);
+                chartMain = Color.FromArgb(255, 24, 28, 34);      // #181C22 Chart Canvas
+                chartGrid = Color.FromArgb(255, 52, 60, 71);      // #343C47 Chart Grid
+                colorGray = Color.FromArgb(255, 155, 166, 178);   // #9BA6B2 Secondary Text (6.3:1 contrast)
             }
             else
             {
-                buttonMain = SystemColors.ControlLightLight;
-                buttonSecond = SystemColors.ControlLight;
+                // Strix Daylight Palette
+                buttonMain = Color.FromArgb(255, 232, 236, 242);   // #E8ECF2 Interactive Control Surface
+                buttonSecond = Color.FromArgb(255, 255, 255, 255); // #FFFFFF Elevated Card Surface
 
-                formBack = SystemColors.Control;
-                foreMain = SystemColors.ControlText;
-                borderMain = Color.FromArgb(255, 220, 220, 220);
-                borderSecond = Color.FromArgb(255, 215, 215, 215);
+                formBack = Color.FromArgb(255, 243, 245, 248);     // #F3F5F8 Primary Canvas
+                foreMain = Color.FromArgb(255, 17, 21, 28);        // #11151C Primary Text (16.1:1 contrast)
+                borderMain = Color.FromArgb(255, 203, 210, 220);   // #CBD2DC Primary Border
+                borderSecond = Color.FromArgb(255, 216, 222, 232); // #D8DEE8 Secondary Hairline Border
 
-                chartMain = SystemColors.ControlLightLight;
-                chartGrid = Color.LightGray;
+                chartMain = Color.FromArgb(255, 255, 255, 255);    // #FFFFFF Chart Canvas
+                chartGrid = Color.FromArgb(255, 203, 210, 220);    // #CBD2DC Chart Grid
+                colorGray = Color.FromArgb(255, 74, 85, 104);      // #4A5568 Secondary Text (6.8:1 contrast)
             }
         }
 
@@ -103,7 +108,7 @@ namespace GHelper.UI
             using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
             var registryValueObject = key?.GetValue("AppsUseLightTheme");
 
-            if (registryValueObject == null) return false;
+            if (registryValueObject == null) return true;
             return (int)registryValueObject <= 0;
         }
 
@@ -123,16 +128,13 @@ namespace GHelper.UI
             if (changed || firstInit)
             {
                 DwmSetWindowAttribute(Handle, 20, new[] { darkTheme ? 1 : 0 }, 4);
-                SetPreferredAppMode(darkTheme ? 1 : 0); 
+                SetPreferredAppMode(darkTheme ? 1 : 0);
                 SetWindowTheme(Handle, darkTheme ? "DarkMode_Explorer" : "Explorer", null);
                 ControlHelper.Adjust(this, changed);
                 this.Invalidate();
             }
 
-
             return changed;
-
         }
-
     }
 }
