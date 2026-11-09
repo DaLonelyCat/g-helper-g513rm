@@ -28,7 +28,7 @@ namespace GHelper.Mode
 
         public static void EnsureSeeded(bool forceReset = false)
         {
-            if (!forceReset && AppConfig.Is("g513rm_presets_seeded"))
+            if (!forceReset && AppConfig.Is("g513rm_presets_seeded") && AppConfig.Get($"auto_boost_{ModeSilent}") != -1)
             {
                 if (!Modes.Exists(ModeSweetSpot))
                 {
@@ -43,7 +43,7 @@ namespace GHelper.Mode
             SeedSweetSpot();
 
             AppConfig.Set("g513rm_presets_seeded", 1);
-            Logger.WriteLine("Calibrated ROG Strix G513RM (Ryzen 7 6800H + RTX 3060) presets seeded.");
+            Logger.WriteLine("Calibrated ROG Strix G513RM (Ryzen 7 6800H + RTX 3060) presets seeded with CPU Boost and Curve Optimizer.");
         }
 
         public static void SeedSilent()
@@ -54,6 +54,8 @@ namespace GHelper.Mode
             AppConfig.Set($"limit_slow_{m}", 35);       // 35W sPPT
             AppConfig.Set($"limit_fast_{m}", 45);       // 45W fPPT
             AppConfig.Set($"cpu_temp_{m}", 75);         // 75°C CPU Cap
+            AppConfig.Set($"auto_boost_{m}", 0);        // CPU Boost: Disabled (3.2GHz base clock cap, eliminates idle heat spikes)
+            AppConfig.Set($"cpu_uv_{m}", 0);            // 0 on Silent
             AppConfig.Set($"gpu_boost_{m}", 5);         // 5W Dynamic Boost
             AppConfig.Set($"gpu_temp_{m}", 75);         // 75°C GPU Target
             AppConfig.Set($"gpu_core_{m}", 0);
@@ -73,6 +75,8 @@ namespace GHelper.Mode
             AppConfig.Set($"limit_slow_{m}", 65);       // 65W sPPT
             AppConfig.Set($"limit_fast_{m}", 80);       // 80W fPPT
             AppConfig.Set($"cpu_temp_{m}", 85);         // 85°C CPU Cap
+            AppConfig.Set($"auto_boost_{m}", 3);        // CPU Boost: Efficient Enabled (smooth scaling under sustained load)
+            AppConfig.Set($"cpu_uv_{m}", -10);          // -10 Curve Optimizer offset for cooler multi-thread performance
             AppConfig.Set($"gpu_boost_{m}", 15);        // 15W Dynamic Boost (130W GPU)
             AppConfig.Set($"gpu_temp_{m}", 82);         // 82°C GPU Target
             AppConfig.Set($"gpu_core_{m}", 50);         // +50 MHz Core
@@ -92,6 +96,8 @@ namespace GHelper.Mode
             AppConfig.Set($"limit_slow_{m}", 90);       // 90W sPPT
             AppConfig.Set($"limit_fast_{m}", 115);      // 115W fPPT
             AppConfig.Set($"cpu_temp_{m}", 92);         // 92°C CPU Cap
+            AppConfig.Set($"auto_boost_{m}", 2);        // CPU Boost: Aggressive (maximum benchmark performance)
+            AppConfig.Set($"cpu_uv_{m}", 0);            // 0 stock baseline
             AppConfig.Set($"gpu_boost_{m}", 25);        // 25W Max Dynamic Boost (140W RTX 3060)
             AppConfig.Set($"gpu_temp_{m}", 86);         // 86°C GPU Target
             AppConfig.Set($"gpu_core_{m}", 100);        // +100 MHz Core
@@ -113,6 +119,8 @@ namespace GHelper.Mode
             AppConfig.Set($"limit_slow_{m}", 55);       // 55W sPPT
             AppConfig.Set($"limit_fast_{m}", 75);       // 75W fPPT
             AppConfig.Set($"cpu_temp_{m}", 83);         // 83°C CPU Cap
+            AppConfig.Set($"auto_boost_{m}", 2);        // CPU Boost: Aggressive (full 140W gaming clocks)
+            AppConfig.Set($"cpu_uv_{m}", -10);          // -10 Curve Optimizer offset for cooler gaming thermals
             AppConfig.Set($"gpu_boost_{m}", 25);        // Full 25W Dynamic Boost (140W RTX 3060)
             AppConfig.Set($"gpu_temp_{m}", 83);         // 83°C GPU Target
             AppConfig.Set($"gpu_core_{m}", 120);        // +120 MHz Core

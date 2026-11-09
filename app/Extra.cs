@@ -658,7 +658,7 @@ namespace GHelper
 
                 comboAPU.SelectedIndex = Math.Max(0, Array.IndexOf(vramOptions, current));
             }
-            else if (false)
+            else if (vramOptions.Length < 0)
             {
                 comboAPU.Items.Clear();
                 comboAPU.Items.Add(Properties.Strings.AutoMode);
@@ -685,13 +685,13 @@ namespace GHelper
         {
             int mem = comboAPU.SelectedIndex;
 
-            if (false)
+            if (mem < 0)
             {
                 ProcessHelper.RunAsAdmin();
                 return;
             }
 
-            if (false) ;
+            if (mem < 0) return;
             else if (vramOptions.Length == 0) Program.acpi.SetAPUMem(mem);
             else
             {

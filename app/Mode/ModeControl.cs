@@ -9,7 +9,6 @@ namespace GHelper.Mode
     {
         static SettingsForm settings = Program.settingsForm;
 
-        private static bool customFans = false;
         private static int customPower = 0;
 
         private int _cpuUV = 0;
@@ -135,7 +134,6 @@ namespace GHelper.Mode
                 {
                     bool reset = AppConfig.IsResetRequired() && (Modes.GetBase(oldMode) == Modes.GetBase(mode)) && customPower > 0 && !AppConfig.IsApplyPower();
 
-                    customFans = false;
                     customPower = 0;
 
                     SetModeLabel();
@@ -221,20 +219,34 @@ namespace GHelper.Mode
 
         public void AutoFans(bool force = false)
         {
-            customFans = false;
-
             if (AppConfig.IsApplyFans() || force)
             {
-                int cpuResult = Program.acpi.SetFanCurve(AsusFan.CPU, AppConfig.GetFanConfig(AsusFan.CPU));
-                int gpuResult = Program.acpi.SetFanCurve(AsusFan.GPU, AppConfig.GetFanConfig(AsusFan.GPU));
+                byte[] cpuCurve = AppConfig.GetFanConfig(AsusFan.CPU);
+                byte[] gpuCurve = AppConfig.GetFanConfig(AsusFan.GPU);
+
+                // Smart G513RM Floor: If in Silent Mode on AC and dGPU power exceeds 25W,
+                // apply 5% whisper airflow floor to prevent heatsink heat-soak
+                if (Modes.GetCurrent() == G513Presets.ModeSilent &&
+                    SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online &&
+                    HardwareControl.GetGPUPower() is > 25f &&
+                    cpuCurve.Length == 16 && gpuCurve.Length == 16)
+                {
+                    cpuCurve[8] = Math.Max(cpuCurve[8], (byte)5);
+                    cpuCurve[9] = Math.Max(cpuCurve[9], (byte)5);
+                    gpuCurve[8] = Math.Max(gpuCurve[8], (byte)5);
+                    gpuCurve[9] = Math.Max(gpuCurve[9], (byte)5);
+                }
+
+                int cpuResult = Program.acpi.SetFanCurve(AsusFan.CPU, cpuCurve);
+                int gpuResult = Program.acpi.SetFanCurve(AsusFan.GPU, gpuCurve);
 
                 if (AppConfig.Is("mid_fan"))
                     Program.acpi.SetFanCurve(AsusFan.Mid, AppConfig.GetFanConfig(AsusFan.Mid));
 
                 if (cpuResult != 1 || gpuResult != 1)
                 {
-                    cpuResult = Program.acpi.SetFanRange(AsusFan.CPU, AppConfig.GetFanConfig(AsusFan.CPU));
-                    gpuResult = Program.acpi.SetFanRange(AsusFan.GPU, AppConfig.GetFanConfig(AsusFan.GPU));
+                    cpuResult = Program.acpi.SetFanRange(AsusFan.CPU, cpuCurve);
+                    gpuResult = Program.acpi.SetFanRange(AsusFan.GPU, gpuCurve);
 
                     if (cpuResult != 1 || gpuResult != 1)
                     {
@@ -245,7 +257,6 @@ namespace GHelper.Mode
                 else
                 {
                     settings.LabelFansResult("");
-                    customFans = true;
                 }
 
                 int hystUp = AppConfig.GetMode("hysteresis_up");

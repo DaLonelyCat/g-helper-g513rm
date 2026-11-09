@@ -17,7 +17,6 @@ namespace PawnIO
             return MemoryMarshal.Cast<uint, byte>(regs).SequenceEqual("AuthenticAMD"u8);
         }
 
-
         private const string CpuRegKey = @"HARDWARE\DESCRIPTION\System\CentralProcessor\0";
 
         private static readonly Lazy<(string Name, string Caption)> _data =
@@ -35,15 +34,10 @@ namespace PawnIO
         public static int MinTemp    => AppConfig.Get("min_temp",     75);
         public static int DefaultTemp=> AppConfig.Get("max_temp",     96);
 
-        public static bool IsSupportedUV()
-            => Name.Contains("RYZEN AI MAX") ||
-               Name.Contains("Ryzen AI 9")   ||
-               Name.Contains("Ryzen 9")      ||
-               Name.Contains("4900H")        ||
-               Name.Contains("4800H")        ||
-               Name.Contains("4600H");
+        // Custom G513RM build: Rembrandt Ryzen 7 6800H fully supported via RyzenSmuService MP1 mailbox (0x4C)
+        public static bool IsSupportedUV() => true;
 
-        public static bool IsSupportedUViGPU() => Name.Contains("6900H");
+        public static bool IsSupportedUViGPU() => Name.Contains("6900H") || Name.Contains("6800H");
 
         private static (string Name, string Caption) Load()
         {

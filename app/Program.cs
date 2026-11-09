@@ -121,6 +121,7 @@ namespace GHelper
             settingsForm.InitAura();
 
             ScreenControl.InitScreen();
+            ScreenControl.CheckLidDisplayHealth();
 
             SetAutoModes(init: true);
 

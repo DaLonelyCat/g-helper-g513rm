@@ -79,7 +79,8 @@ namespace GHelper.Helpers
             else
             {
                 string wattText = gpuWatts is > 0 ? $"{gpuWatts.Value:F0}W" : "dGPU";
-                gpuHeader = $"RTX 3060: {Math.Round(gpuTemp.Value)}°C";
+                string hiTag = (gpuWatts is > 25f) ? " [Hi]" : "";
+                gpuHeader = $"RTX 3060: {Math.Round(gpuTemp.Value)}°C{hiTag}";
                 gpuDetail = $"{wattText} | {gpuRpm} RPM";
             }
 

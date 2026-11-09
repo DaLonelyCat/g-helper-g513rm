@@ -100,13 +100,10 @@ namespace GHelper.USB
             set { rearMode = GetRearModes().ContainsKey(value) ? value : AuraMode.AuraStatic; }
         }
 
-        static bool isACPI = false;
-
         static bool isStrix => BacklightType == AuraBacklightType.MultiZone || BacklightType == AuraBacklightType.PerKey;
         public static bool IsBacklightDetected => BacklightType != AuraBacklightType.Unknown;
 
         static bool isStrix4Zone = true;
-        static bool isStrixNumpad = false;
         static bool isStrix4ZoneFlipped = true; // G513RM uses flipped 4-zone wire order
 
         static public bool isWhite = AppConfig.IsWhite();

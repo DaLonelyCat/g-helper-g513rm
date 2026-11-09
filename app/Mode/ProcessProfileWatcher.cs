@@ -15,8 +15,8 @@ namespace GHelper.Mode
             "cs2", "valorant-win64-shipping", "dota2", "eldenring", "cyberpunk2077",
             "witcher3", "r5apex", "overwatch", "helldivers2", "bg3", "bg3_dx11",
             "forzahorizon5", "gta5", "rdr2", "palworld-win64-shipping", "MonsterHunterWorld",
-            "MonsterHunterWilds", "blackmythwukong", " b1-win64-shipping", "genshinimpact",
-            "starrail", "wuwa", "client-win64-shipping", "cod", "bf2042", " marvel-win64-shipping",
+            "MonsterHunterWilds", "blackmythwukong", "b1-win64-shipping", "genshinimpact",
+            "starrail", "wuwa", "client-win64-shipping", "cod", "bf2042", "marvel-win64-shipping",
             "poe2", "pathofexile", "diablo iv", "balatro", "rustclient", "escapefromtarkov",
             "javaw", "minecraft.windows", "robloxplayerbeta", "league of legends", "hd-player"
         };

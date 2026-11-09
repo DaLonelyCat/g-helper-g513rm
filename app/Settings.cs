@@ -53,6 +53,7 @@ namespace GHelper
         private RButton buttonBattery80 = default!;
 
         static long lastRefresh;
+        private static bool _dgpuFloorActive = false;
         static long lastBatteryRefresh;
         static long lastLostFocus;
 
@@ -453,8 +454,47 @@ namespace GHelper
             buttonSweetSpot.Click += ButtonSweetSpot_Click;
             buttonTurbo.Click += ButtonTurbo_Click;
 
-            buttonTelemCPU.Click += (_, _) => FansToggle(0);
-            buttonTelemGPU.Click += (_, _) => FansToggle(1);
+            buttonTelemCPU.MouseUp += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Right)
+                {
+                    int currentBoost = PowerNative.GetCPUBoost();
+                    int nextBoost = currentBoost switch
+                    {
+                        0 => 3, // Disabled -> Efficient Enabled
+                        3 => 2, // Efficient Enabled -> Aggressive
+                        _ => 0  // Aggressive / other -> Disabled
+                    };
+                    PowerNative.SetCPUBoost(nextBoost);
+                    AppConfig.SetMode("auto_boost", nextBoost);
+                    string name = nextBoost switch
+                    {
+                        0 => "Disabled (Cool/Base Clocks)",
+                        3 => "Efficient Enabled (Dynamic)",
+                        2 => "Aggressive (Max Clocks)",
+                        _ => "Default"
+                    };
+                    Program.toast?.RunToast($"CPU Boost: {name}", ToastIcon.Battery);
+                }
+                else if (e.Button == MouseButtons.Left)
+                {
+                    FansToggle(0);
+                }
+            };
+
+            buttonTelemGPU.MouseUp += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Right)
+                {
+                    gpuControl.KillGPUApps();
+                    Program.toast?.RunToast("dGPU Apps Closed", ToastIcon.Battery);
+                }
+                else if (e.Button == MouseButtons.Left)
+                {
+                    FansToggle(1);
+                }
+            };
+
             buttonTelemRAM.Click += ButtonTelemRAM_Click;
 
             buttonAutoGame.Click += ButtonAutoGame_Click;
@@ -569,9 +609,9 @@ namespace GHelper
             labelBacklight.ForeColor = colorStandard;
             labelBacklight.Click += LabelBacklight_Click;
 
-            toolTip.SetToolTip(buttonTelemCPU, "Ryzen 7 6800H temperature, package power, and CPU fan speed. Click to open CPU Fan & Power settings.");
-            toolTip.SetToolTip(buttonTelemGPU, "NVIDIA RTX 3060 temperature, power draw, VRAM usage, and GPU fan speed. Click to open GPU Clock & Boost settings.");
-            toolTip.SetToolTip(buttonTelemRAM, "32GB DDR5 RAM utilization. Click to purge Windows Standby List and background working sets.");
+            toolTip.SetToolTip(buttonTelemCPU, "Ryzen 7 6800H telemetry. Left-Click: Open Fans & Power. Right-Click: Quick-toggle CPU Boost (Disabled / Efficient / Aggressive).");
+            toolTip.SetToolTip(buttonTelemGPU, "NVIDIA RTX 3060 telemetry. Left-Click: Open GPU settings. Right-Click: Kill dGPU background apps.");
+            toolTip.SetToolTip(buttonTelemRAM, "32GB DDR5 RAM telemetry. Click to purge Windows Standby List and background working sets.");
             toolTip.SetToolTip(buttonSweetSpot, "G513RM Sweet Spot: 40W CPU SPL / 55W sPPT, 83C cap, full 140W RTX 3060 (+120MHz Core / +250MHz Mem), low-noise gaming fan curve.");
             toolTip.SetToolTip(buttonAutoGame, "Automatically switches to Sweet Spot when a game or sustained RTX 3060 3D workload (>45W) runs, and restores your previous mode on exit.");
 
@@ -1662,6 +1702,21 @@ namespace GHelper
                 HardwareControl.ReadSensors();
                 snap = G513Telemetry.Capture();
             });
+
+            if (Modes.GetCurrent() == G513Presets.ModeSilent && SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online)
+            {
+                float? watts = HardwareControl.GetGPUPower();
+                if (watts is > 25f && !_dgpuFloorActive)
+                {
+                    _dgpuFloorActive = true;
+                    Program.modeControl.AutoFans();
+                }
+                else if (watts is < 18f && _dgpuFloorActive)
+                {
+                    _dgpuFloorActive = false;
+                    Program.modeControl.AutoFans();
+                }
+            }
 
             if (HardwareControl.cpuTemp > 0)
                 cpuTemp = ": " + TempHelper.FormatTemp((double)HardwareControl.cpuTemp);

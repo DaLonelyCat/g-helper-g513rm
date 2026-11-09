@@ -550,8 +550,6 @@ public static class HardwareControl
         }
     }
 
-    private static EnergyChannel? _cpuChannel, _apuChannel;
-
     private static float? GetCoresPower()
     {
         var counters = _coreCounters;

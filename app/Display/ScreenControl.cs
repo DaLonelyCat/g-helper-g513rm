@@ -204,5 +204,58 @@ namespace GHelper.Display
                 );
             });
         }
+
+        // Persistent Lid & Display Guard for G513RM:
+        // Ensures AMD Panel Self Refresh (PSR) and Windows Fast Startup remain disabled
+        // to prevent black screen wake failures on lid open.
+        public static void CheckLidDisplayHealth()
+        {
+            try
+            {
+                if (!ProcessHelper.IsUserAdministrator()) return;
+
+                // 1. AMD Radeon PSR check
+                const string classKey = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+                using var baseKey = Registry.LocalMachine.OpenSubKey(classKey, writable: true);
+                if (baseKey != null)
+                {
+                    foreach (var subName in baseKey.GetSubKeyNames())
+                    {
+                        if (subName.Length != 4 || !char.IsDigit(subName[0])) continue;
+                        using var subKey = baseKey.OpenSubKey(subName, writable: true);
+                        if (subKey == null) continue;
+
+                        var desc = subKey.GetValue("DriverDesc")?.ToString() ?? "";
+                        if (desc.Contains("AMD") || desc.Contains("Radeon"))
+                        {
+                            object? psr = subKey.GetValue("DalPSRFeatureEnable");
+                            if (psr is not null && Convert.ToInt32(psr) != 0)
+                            {
+                                subKey.SetValue("DalPSRFeatureEnable", 0, RegistryValueKind.DWord);
+                                subKey.SetValue("DalPSR2FeatureEnable", 0, RegistryValueKind.DWord);
+                                Logger.WriteLine($"LidHealthGuard: Disabled AMD PSR on {desc} ({subName}) to prevent lid wake failure.");
+                            }
+                        }
+                    }
+                }
+
+                // 2. Windows Fast Startup check
+                const string powerKeyPath = @"SYSTEM\CurrentControlSet\Control\Session Manager\Power";
+                using var pKey = Registry.LocalMachine.OpenSubKey(powerKeyPath, writable: true);
+                if (pKey != null)
+                {
+                    object? hiberboot = pKey.GetValue("HiberbootEnabled");
+                    if (hiberboot is not null && Convert.ToInt32(hiberboot) != 0)
+                    {
+                        pKey.SetValue("HiberbootEnabled", 0, RegistryValueKind.DWord);
+                        Logger.WriteLine("LidHealthGuard: Disabled Windows Fast Startup (Hiberboot) to ensure clean cold boots.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("LidHealthGuard error: " + ex.Message);
+            }
+        }
     }
 }
