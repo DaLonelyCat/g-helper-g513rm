@@ -191,6 +191,8 @@ namespace GHelper.Mode
             if (AppConfig.GetMode("auto_boost") != -1)
                 PowerNative.SetCPUBoost(AppConfig.GetMode("auto_boost"));
 
+            HardwareControl.InitCPUPowerAsync();
+
             settings.FansInit();
         }
 

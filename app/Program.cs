@@ -60,6 +60,7 @@ namespace GHelper
 
             // Ensure calibrated ROG Strix G513RM presets (Silent, Balanced, Turbo, Sweet Spot) are seeded
             G513Presets.EnsureSeeded();
+            HardwareControl.InitCPUPowerAsync();
 
             settingsForm = new SettingsForm();
             modeControl = new ModeControl();

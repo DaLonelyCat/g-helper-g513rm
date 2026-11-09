@@ -453,61 +453,90 @@ public static class HardwareControl
         return gpuTemp;
     }
 
+    private static readonly object _cpuPowerLock = new();
     private static PerformanceCounter? _cpuPowerCounter;
-    private static bool _cpuPowerCounterFailed;
+    private static PerformanceCounter? _cpuPowerFallbackCounter;
     private static bool _cpuPowerInitStarted;
-    private static int _cpuPowerNullTicks;
-    private static int _cpuPowerReadErrors;
-    private const int CpuPowerMaxReadErrors = 3;
+    private static float _lastValidCpuWatts = 0f;
+    private static long _lastCpuSampleTick = 0;
+    private const long CpuSampleMinIntervalMs = 700;
     private static readonly string[] _powerCounterInstances = { "Apu Power", "RAPL_Package0_PKG", "CPU Power", "Socket Power", "Current Socket Power" };
 
     public static void InitCPUPowerAsync()
     {
-        if (_cpuPowerInitStarted) return;
-        _cpuPowerInitStarted = true;
+        lock (_cpuPowerLock)
+        {
+            if (_cpuPowerInitStarted && _cpuPowerCounter != null) return;
+            _cpuPowerInitStarted = true;
+        }
 
         Task.Run(() =>
         {
-            var cached = AppConfig.GetString("cpu_power_counter");
-            if (!string.IsNullOrEmpty(cached))
+            lock (_cpuPowerLock)
             {
-                try
+                var cached = AppConfig.GetString("cpu_power_counter");
+                if (!string.IsNullOrEmpty(cached))
                 {
-                    var counter = new PerformanceCounter("Energy Meter", "Power", cached, true);
-                    counter.NextValue();
-                    _cpuPowerCounter = counter;
-                    Logger.WriteLine("CPU Power source (cached): " + cached);
-                    return;
-                }
-                catch
-                {
-                    AppConfig.Set("cpu_power_counter", "");
-                }
-            }
-
-            try
-            {
-                var category = new PerformanceCounterCategory("Energy Meter");
-                var instances = category.GetInstanceNames();
-
-                foreach (var name in _powerCounterInstances)
-                {
-                    if (instances.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    try
                     {
-                        var counter = new PerformanceCounter("Energy Meter", "Power", name, true);
+                        var counter = new PerformanceCounter("Energy Meter", "Power", cached, true);
                         counter.NextValue();
+                        _cpuPowerCounter?.Dispose();
                         _cpuPowerCounter = counter;
-                        AppConfig.Set("cpu_power_counter", name);
-                        Logger.WriteLine("CPU Power source: " + name);
-                        return;
+                        Logger.WriteLine("CPU Power source (cached): " + cached);
+                    }
+                    catch
+                    {
+                        AppConfig.Set("cpu_power_counter", "");
                     }
                 }
 
-                _cpuPowerCounterFailed = true;
-            }
-            catch
-            {
-                _cpuPowerCounterFailed = true;
+                try
+                {
+                    var category = new PerformanceCounterCategory("Energy Meter");
+                    var instances = category.GetInstanceNames();
+
+                    if (_cpuPowerCounter == null)
+                    {
+                        foreach (var name in _powerCounterInstances)
+                        {
+                            if (instances.Contains(name, StringComparer.OrdinalIgnoreCase))
+                            {
+                                var counter = new PerformanceCounter("Energy Meter", "Power", name, true);
+                                counter.NextValue();
+                                _cpuPowerCounter = counter;
+                                AppConfig.Set("cpu_power_counter", name);
+                                Logger.WriteLine("CPU Power source: " + name);
+                                break;
+                            }
+                        }
+                    }
+
+                    if (_cpuPowerFallbackCounter == null)
+                    {
+                        string currentName = AppConfig.GetString("cpu_power_counter");
+                        foreach (var name in _powerCounterInstances)
+                        {
+                            if (!string.Equals(name, currentName, StringComparison.OrdinalIgnoreCase) &&
+                                instances.Contains(name, StringComparer.OrdinalIgnoreCase))
+                            {
+                                try
+                                {
+                                    var fb = new PerformanceCounter("Energy Meter", "Power", name, true);
+                                    fb.NextValue();
+                                    _cpuPowerFallbackCounter = fb;
+                                    Logger.WriteLine("CPU Power fallback source: " + name);
+                                    break;
+                                }
+                                catch { }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteLine("InitCPUPower failed: " + ex.Message);
+                }
             }
         });
     }
@@ -569,35 +598,85 @@ public static class HardwareControl
 
     public static float? GetCPUPower()
     {
-        if (_cpuPowerCounterFailed || _cpuPowerCounter == null) return null;
+        lock (_cpuPowerLock)
+        {
+            long now = Environment.TickCount64;
 
-        try
-        {
-            float mW = _cpuPowerCounter.NextValue();
-            if (mW > 0) return mW / 1000f;
-        }
-        catch
-        {
-            _cpuPowerCounter?.Dispose();
-            _cpuPowerCounter = null;
-            if (++_cpuPowerReadErrors >= CpuPowerMaxReadErrors)
+            // Cache hit: If queried within measurement window, return cached reading.
+            // Prevents counter sample collisions between concurrent threads.
+            if (now - _lastCpuSampleTick < CpuSampleMinIntervalMs && _lastValidCpuWatts > 0)
             {
-                _cpuPowerCounterFailed = true;
+                return _lastValidCpuWatts;
             }
-            else
+
+            if (_cpuPowerCounter == null)
             {
-                _cpuPowerCounterFailed = false;
+                InitCPUPowerAsync();
+                return (_lastValidCpuWatts > 0 && now - _lastCpuSampleTick < 5000) ? _lastValidCpuWatts : null;
+            }
+
+            // 1. Primary counter
+            try
+            {
+                float mW = _cpuPowerCounter.NextValue();
+                if (mW > 0)
+                {
+                    _lastValidCpuWatts = mW / 1000f;
+                    _lastCpuSampleTick = now;
+                    return _lastValidCpuWatts;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("CPU power primary read error: " + ex.Message);
+                _cpuPowerCounter?.Dispose();
+                _cpuPowerCounter = null;
                 _cpuPowerInitStarted = false;
             }
-        }
 
-        return null;
+            // 2. Secondary fallback counter (e.g. RAPL_Package0_PKG)
+            if (_cpuPowerFallbackCounter != null)
+            {
+                try
+                {
+                    float fbMW = _cpuPowerFallbackCounter.NextValue();
+                    if (fbMW > 0)
+                    {
+                        _lastValidCpuWatts = fbMW / 1000f;
+                        _lastCpuSampleTick = now;
+                        return _lastValidCpuWatts;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteLine("CPU power fallback read error: " + ex.Message);
+                    _cpuPowerFallbackCounter?.Dispose();
+                    _cpuPowerFallbackCounter = null;
+                }
+            }
+
+            // 3. Fallback to last valid reading within 5 seconds to bridge transient zero deltas
+            if (_lastValidCpuWatts > 0 && now - _lastCpuSampleTick < 5000)
+            {
+                return _lastValidCpuWatts;
+            }
+
+            return null;
+        }
     }
 
     public static void ResetCPUPowerCounter()
     {
-        _cpuPowerReadErrors = 0;
-        _cpuPowerCounterFailed = false;
+        lock (_cpuPowerLock)
+        {
+            _lastValidCpuWatts = 0f;
+            _lastCpuSampleTick = 0;
+            _cpuPowerCounter?.Dispose();
+            _cpuPowerCounter = null;
+            _cpuPowerFallbackCounter?.Dispose();
+            _cpuPowerFallbackCounter = null;
+            _cpuPowerInitStarted = false;
+        }
     }
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -702,6 +781,7 @@ public static class HardwareControl
 
         cpuTemp = GetCPUTemp();
         gpuTemp = GetGPUTemp();
+        cpuPower = GetCPUPower();
 
         if (log) Logger.WriteLine($"Temps: {cpuTemp} {gpuTemp} {cpuFan} {gpuFan} {midFan}");
 
@@ -725,6 +805,7 @@ public static class HardwareControl
 
         cpuTemp = GetCPUTemp();
         gpuTemp = GetGPUTemp();
+        cpuPower = GetCPUPower();
 
         if (readUsage)
         {
@@ -765,20 +846,7 @@ public static class HardwareControl
 
         if (readPower)
         {
-            InitCPUPowerAsync();
-            float? newCpu = GetCPUPower() ?? GetAmdApuPower();
-
-            if (newCpu > 0)
-            {
-                cpuPower = newCpu;
-                _cpuPowerNullTicks = 0;
-            }
-            else
-            {
-                if (++_cpuPowerNullTicks >= 5)
-                    cpuPower = null;
-            }
-
+            cpuPower = GetCPUPower();
             gpuPower = GetGPUPower();
         }
         else
