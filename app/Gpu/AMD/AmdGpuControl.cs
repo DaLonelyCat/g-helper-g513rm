@@ -417,6 +417,8 @@ public class AmdGpuControl : IGpuControl
         return performanceLevels;
     }
 
+    public System.Diagnostics.Process[] GetActiveApplications() => [];
+
     public void KillGPUApps()
     {
 

@@ -1,4 +1,4 @@
-﻿using GHelper.Helpers;
+using GHelper.Helpers;
 using NvAPIWrapper.GPU;
 using NvAPIWrapper.Native;
 using NvAPIWrapper.Native.GPU;
@@ -159,6 +159,19 @@ public class NvidiaGpuControl : IGpuControl
         "applicationframehost", "systemsettings", "dllhost", "conhost",
         "audiodg", "ctfloader", "spoolsv", "wlanext", "msdtc",
     };
+
+    public Process[] GetActiveApplications()
+    {
+        if (!IsValid || _internalGpu == null) return [];
+        try
+        {
+            return _internalGpu.GetActiveApplications();
+        }
+        catch
+        {
+            return [];
+        }
+    }
 
     public void KillGPUApps()
     {

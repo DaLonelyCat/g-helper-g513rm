@@ -903,6 +903,18 @@ public static class HardwareControl
         }
     }
 
+    public static Process[] GetActiveGpuProcesses()
+    {
+        try
+        {
+            return GpuControl?.GetActiveApplications() ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
     public static void KillGPUApps()
     {
         List<string> tokill = new() { "EADesktop", "epicgameslauncher", "ASUSSmartDisplayControl" };

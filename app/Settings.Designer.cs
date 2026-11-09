@@ -49,7 +49,7 @@ namespace GHelper
             labelBatteryTitle = new Label();
             panelFooter = new Panel();
             tableButtons = new TableLayoutPanel();
-            buttonDonate = new RBadgeButton();
+            buttonPowerTracker = new RButton();
             buttonQuit = new RButton();
             buttonUpdates = new RButton();
             checkStartup = new CheckBox();
@@ -425,7 +425,7 @@ namespace GHelper
             tableButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.3333321F));
             tableButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.3333321F));
             tableButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 27F));
-            tableButtons.Controls.Add(buttonDonate, 0, 0);
+            tableButtons.Controls.Add(buttonPowerTracker, 0, 0);
             tableButtons.Controls.Add(buttonQuit, 2, 0);
             tableButtons.Controls.Add(buttonUpdates, 1, 0);
             tableButtons.Dock = DockStyle.Top;
@@ -437,26 +437,26 @@ namespace GHelper
             tableButtons.Size = new Size(787, 58);
             tableButtons.TabIndex = 25;
             // 
-            // buttonDonate
+            // buttonPowerTracker
             // 
-            buttonDonate.Activated = false;
-            buttonDonate.BackColor = SystemColors.ControlLight;
-            buttonDonate.Badge = 0;
-            buttonDonate.BorderColor = Color.Transparent;
-            buttonDonate.BorderRadius = 2;
-            buttonDonate.Dock = DockStyle.Top;
-            buttonDonate.FlatStyle = FlatStyle.Flat;
-            buttonDonate.Image = Properties.Resources.icons8_heart_32;
-            buttonDonate.ImageAlign = ContentAlignment.MiddleRight;
-            buttonDonate.Location = new Point(4, 5);
-            buttonDonate.Margin = new Padding(4, 5, 4, 5);
-            buttonDonate.Name = "buttonDonate";
-            buttonDonate.Secondary = true;
-            buttonDonate.Size = new Size(254, 48);
-            buttonDonate.TabIndex = 3;
-            buttonDonate.Text = "&Donate";
-            buttonDonate.TextImageRelation = TextImageRelation.ImageBeforeText;
-            buttonDonate.UseVisualStyleBackColor = false;
+            buttonPowerTracker.Activated = false;
+            buttonPowerTracker.BackColor = SystemColors.ControlLight;
+            //
+            buttonPowerTracker.BorderColor = Color.Transparent;
+            buttonPowerTracker.BorderRadius = 2;
+            buttonPowerTracker.Dock = DockStyle.Top;
+            buttonPowerTracker.FlatStyle = FlatStyle.Flat;
+            buttonPowerTracker.Image = Properties.Resources.icons8_gauge_32;
+            buttonPowerTracker.ImageAlign = ContentAlignment.MiddleRight;
+            buttonPowerTracker.Location = new Point(4, 5);
+            buttonPowerTracker.Margin = new Padding(4, 5, 4, 5);
+            buttonPowerTracker.Name = "buttonPowerTracker";
+            buttonPowerTracker.Secondary = true;
+            buttonPowerTracker.Size = new Size(254, 48);
+            buttonPowerTracker.TabIndex = 3;
+            buttonPowerTracker.Text = "&Power Draw";
+            buttonPowerTracker.TextImageRelation = TextImageRelation.ImageBeforeText;
+            buttonPowerTracker.UseVisualStyleBackColor = false;
             // 
             // buttonQuit
             // 
@@ -2259,7 +2259,7 @@ namespace GHelper
         private Label labelBacklight;
         private Panel panelVersion;
         private Label labelVersion;
-        private RBadgeButton buttonDonate;
+        private RButton buttonPowerTracker;
         private RButton buttonEnergySaver;
         private RButton buttonAmdOled;
         private RButton buttonArmoury;

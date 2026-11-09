@@ -128,6 +128,9 @@ namespace GHelper
             // Start smart game / 3D workload watcher if enabled
             ProcessProfileWatcher.Init();
 
+            // Start background power and energy tracking engine
+            Power.PowerTrackerEngine.Start();
+
             powerSettleTimer.Elapsed += OnPowerSettled;
 
             // Subscribing for system power change events
@@ -173,6 +176,9 @@ namespace GHelper
                     Startup.ReScheduleAdmin();
                     settingsForm.FansToggle(2);
                     modeControl.SetRyzen();
+                    break;
+                case "power":
+                    settingsForm.PowerTrackerToggle();
                     break;
                 case "colors":
                     Task.Run(async () =>
@@ -420,6 +426,7 @@ namespace GHelper
             NativeMethods.UnregisterPowerSettingNotification(unRegPowerNotifyLid);
             NativeMethods.UnregisterPowerSettingNotification(unRegPowerNotifyEnergy);
             NativeMethods.UnregisterSuspendResumeNotification(unRegSuspendResume);
+            Power.PowerTrackerEngine.Stop();
         }
 
         static void Charge()

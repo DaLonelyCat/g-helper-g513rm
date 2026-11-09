@@ -18,7 +18,8 @@ namespace GHelper
     {
         ContextMenuStrip contextMenuStrip = new CustomContextMenu();
         ToolStripMenuItem menuEco = default!, menuStandard = default!, menuUltimate = default!, menuOptimized = default!;
-        DonateControl donateControl;
+        // DonateControl removed
+        public Power.PowerTrackerForm? powerTrackerForm;
 
         public GPUModeControl gpuControl;
         AutoUpdateControl updateControl;
@@ -392,7 +393,8 @@ namespace GHelper
 
             buttonQuit.Text = Properties.Strings.Quit;
             buttonUpdates.Text = Properties.Strings.Updates;
-            buttonDonate.Text = Properties.Strings.Donate;
+            buttonPowerTracker.Text = "&Power Draw";
+            buttonPowerTracker.AccessibleName = "Power Draw and Energy Tracker";
 
             // Accessible Labels
             sliderBattery.AccessibleName = Properties.Strings.BatteryChargeLimit;
@@ -566,6 +568,7 @@ namespace GHelper
             buttonFHD.MouseLeave += ButtonScreen_MouseLeave;
 
             buttonUpdates.Click += ButtonUpdates_Click;
+            buttonPowerTracker.Click += ButtonPowerTracker_Click;
 
             sliderBattery.MouseUp += SliderBattery_MouseUp;
             sliderBattery.KeyUp += SliderBattery_KeyUp;
@@ -603,8 +606,7 @@ namespace GHelper
             labelVisual.Click += LabelVisual_Click;
             labelCharge.Click += LabelCharge_Click;
 
-            donateControl = new DonateControl(this, buttonDonate);
-            donateControl.Init();
+            // DonateControl removed
 
             labelBacklight.ForeColor = colorStandard;
             labelBacklight.Click += LabelBacklight_Click;
@@ -1052,6 +1054,30 @@ namespace GHelper
             }
         }
 
+        private void ButtonPowerTracker_Click(object? sender, EventArgs e)
+        {
+            PowerTrackerToggle();
+        }
+
+        public void PowerTrackerToggle()
+        {
+            if (powerTrackerForm == null || powerTrackerForm.Text == "")
+            {
+                powerTrackerForm = new Power.PowerTrackerForm();
+                AddOwnedForm(powerTrackerForm);
+            }
+
+            if (powerTrackerForm.Visible)
+            {
+                powerTrackerForm.Close();
+            }
+            else
+            {
+                powerTrackerForm.Show();
+                powerTrackerForm.Focus();
+            }
+        }
+
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == NativeMethods.WM_POWERBROADCAST && m.WParam == (IntPtr)NativeMethods.PBT_APMSUSPEND)
@@ -1239,7 +1265,6 @@ namespace GHelper
                 contextMenuStrip.ForeColor = this.ForeColor;
             }
 
-            donateControl?.ApplyTheme();
         }
 
         public void SetVersionLabel(string label, bool update = false)
@@ -1613,6 +1638,7 @@ namespace GHelper
             if (fansForm != null && fansForm.Text != "") fansForm.Close();
             if (extraForm != null && extraForm.Text != "") extraForm.Close();
             if (updatesForm != null && updatesForm.Text != "") updatesForm.Close();
+            if (powerTrackerForm != null && powerTrackerForm.Text != "") powerTrackerForm.Close();
             MemoryHelper.TrimAfter();
         }
 
@@ -1639,6 +1665,7 @@ namespace GHelper
             return (fansForm != null && fansForm.ContainsFocus) ||
                    (extraForm != null && extraForm.ContainsFocus) ||
                    (updatesForm != null && updatesForm.ContainsFocus) ||
+                   (powerTrackerForm != null && powerTrackerForm.ContainsFocus) ||
                    this.ContainsFocus ||
                    (lostFocusCheck && Math.Abs(DateTimeOffset.Now.ToUnixTimeMilliseconds() - lastLostFocus) < 300);
         }

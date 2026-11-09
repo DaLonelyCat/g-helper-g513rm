@@ -1,4 +1,4 @@
-﻿namespace GHelper.Gpu;
+namespace GHelper.Gpu;
 
 public  interface IGpuControl : IDisposable {
     bool IsNvidia { get; }
@@ -8,6 +8,7 @@ public  interface IGpuControl : IDisposable {
     int? GetGpuUse();
     (long usedMb, long totalMb)? GetVramInfo();
     float? GetGpuPower();
+    System.Diagnostics.Process[] GetActiveApplications();
     void KillGPUApps();
 
 }
